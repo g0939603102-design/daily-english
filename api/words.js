@@ -15,8 +15,10 @@ export default async function handler(req, res) {
       health:"健康生活", shopping:"購物消費"
     };
     const levelMap = {
-      beginner:"初學者（基本單字）", elementary:"初級（常用片語）",
-      intermediate:"中級（口語表達）", advanced:"高級（地道用法）"
+      beginner:"初學者（基本單字，簡單句子）",
+      elementary:"初級（常用片語，日常對話）",
+      intermediate:"中級（口語表達，較複雜句型）",
+      advanced:"高級（地道用法，慣用語）"
     };
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -27,7 +29,7 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 2000,
         messages: [{
           role: "user",
@@ -36,13 +38,18 @@ export default async function handler(req, res) {
 程度：${levelMap[level] || level}
 日期：${new Date().toISOString().slice(0,10)}
 
-生成5個今日單字，只回傳JSON，格式如下：
+生成5個實用的英文單字或片語。只回傳JSON，不要其他文字：
 {"words":[{"word":"","pronunciation":"","partOfSpeech":"","chineseMeaning":"","example1":"","example1Translation":"","example2":"","example2Translation":"","tip":""}]}`
         }]
       })
     });
 
     const data = await response.json();
+    
+    if (data.error) {
+      return res.status(500).json({ error: data.error.message });
+    }
+    
     const text = data.content?.[0]?.text || "";
     const clean = text.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
