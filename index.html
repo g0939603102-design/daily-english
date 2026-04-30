@@ -61,51 +61,14 @@ function getToday() {
 
 // ── AI 生成單字 ──
 async function generateWords(topic, level) {
-  const topicInfo = TOPICS.find(t => t.id === topic);
-  const levelInfo = LEVELS.find(l => l.id === level);
-  const prompt = `你是一位專業的英文老師，專門幫助台灣人學習生活英文。
-請根據以下條件生成今天的5個英文單字學習內容：
-
-主題：${topicInfo?.label}（${topicInfo?.desc}）
-等級：${levelInfo?.label}（${levelInfo?.desc}）
-日期：${getToday()}
-
-要求：
-1. 選擇真實生活中會用到的單字或片語
-2. 避免太學術或太正式的用詞
-3. 例句要自然口語化，像真實對話
-4. 記憶技巧要有趣、好記
-
-請用以下 JSON 格式回應，只回傳 JSON，不要其他文字：
-{
-  "words": [
-    {
-      "word": "單字或片語",
-      "pronunciation": "音標",
-      "partOfSpeech": "詞性",
-      "chineseMeaning": "中文意思",
-      "example1": "第一個英文例句",
-      "example1Translation": "第一句中文翻譯",
-      "example2": "第二個英文例句",
-      "example2Translation": "第二句中文翻譯",
-      "tip": "記憶小技巧（中文）"
-    }
-  ]
-}`;
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/words", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: prompt }]
-    })
+    body: JSON.stringify({ topic, level })
   });
   const data = await res.json();
-  const text = data.content?.find(b => b.type === "text")?.text || "";
-  const clean = text.replace(/```json|```/g, "").trim();
-  return JSON.parse(clean).words;
+  if (!data.words) throw new Error(data.error || "No words");
+  return data.words;
 }
 
 // ── 嚴格發音比對 ──
