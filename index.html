@@ -2,11 +2,19 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>每日英文單字</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; padding: 0; background: #0a0a0f; }
+button { font-family: inherit; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
 <div id="root"></div>
@@ -14,110 +22,350 @@
 const { useState, useRef, useEffect } = React;
 
 const WORD_BANK = [
+  // 第1組：基本狀態
   [
-    { word: "tired", pronunciation: "/ˈtaɪərd/", partOfSpeech: "adj", chineseMeaning: "累的", example: "I'm so tired today.", exampleTranslation: "我今天好累。", tip: "最常用的「累」，比 exhausted 簡單多了" },
-    { word: "hungry", pronunciation: "/ˈhʌŋ.ɡri/", partOfSpeech: "adj", chineseMeaning: "餓的", example: "I'm really hungry. Let's eat!", exampleTranslation: "我好餓，我們去吃吧！", tip: "肚子餓就說 I'm hungry，超直接" },
-    { word: "busy", pronunciation: "/ˈbɪz.i/", partOfSpeech: "adj", chineseMeaning: "忙的", example: "Sorry, I'm busy right now.", exampleTranslation: "抱歉，我現在很忙。", tip: "忙到沒時間回訊息時說這句" },
+    { word: "tired", pronunciation: "/ˈtaɪərd/", partOfSpeech: "adj", chineseMeaning: "累的",
+      example1: "I'm so tired today.", example1Translation: "我今天好累。",
+      example2: "She looked tired after the long flight.", example2Translation: "長途飛行後她看起來很疲憊。",
+      tip: "比 sleepy 更強，整個人累垮了的感覺" },
+    { word: "hungry", pronunciation: "/ˈhʌŋ.ɡri/", partOfSpeech: "adj", chineseMeaning: "餓的",
+      example1: "I'm really hungry. Let's eat!", example1Translation: "我好餓，去吃吧！",
+      example2: "Are you hungry? I can make something.", example2Translation: "你餓嗎？我可以做點東西。",
+      tip: "肚子餓就說 I'm hungry，超直接" },
+    { word: "busy", pronunciation: "/ˈbɪz.i/", partOfSpeech: "adj", chineseMeaning: "忙的",
+      example1: "Sorry, I'm busy right now.", example1Translation: "抱歉，我現在很忙。",
+      example2: "It's been a busy week at work.", example2Translation: "這週工作很忙碌。",
+      tip: "忙到沒時間回訊息時說這句" },
+    { word: "full", pronunciation: "/fʊl/", partOfSpeech: "adj", chineseMeaning: "吃飽了",
+      example1: "I'm so full. I can't eat anymore.", example1Translation: "我好飽，吃不下了。",
+      example2: "No dessert for me — I'm full.", example2Translation: "我不要甜點了，我已經飽了。",
+      tip: "吃飽說 I'm full，不是 I'm filled" },
+    { word: "ready", pronunciation: "/ˈred.i/", partOfSpeech: "adj", chineseMeaning: "準備好了",
+      example1: "Are you ready? Let's go!", example1Translation: "你準備好了嗎？走吧！",
+      example2: "I'm not ready yet — give me five minutes.", example2Translation: "我還沒準備好，給我五分鐘。",
+      tip: "Are you ready? 出門前最常說的一句" },
   ],
+  // 第2組：天氣感受
   [
-    { word: "late", pronunciation: "/leɪt/", partOfSpeech: "adj", chineseMeaning: "遲到的", example: "I'm going to be late!", exampleTranslation: "我要遲到了！", tip: "遲到說 I'm late，簡單有力" },
-    { word: "early", pronunciation: "/ˈɜː.li/", partOfSpeech: "adj", chineseMeaning: "早的", example: "Let's leave early to avoid traffic.", exampleTranslation: "我們早點出發避開塞車。", tip: "early = 早，late = 晚，一組記" },
-    { word: "ready", pronunciation: "/ˈred.i/", partOfSpeech: "adj", chineseMeaning: "準備好了", example: "Are you ready? Let's go!", exampleTranslation: "你準備好了嗎？走吧！", tip: "Are you ready? 出門前最常說的一句" },
+    { word: "hot", pronunciation: "/hɒt/", partOfSpeech: "adj", chineseMeaning: "熱的",
+      example1: "It's so hot today — I'm sweating!", example1Translation: "今天好熱，我在流汗！",
+      example2: "Be careful, the soup is hot.", example2Translation: "小心，湯很燙。",
+      tip: "天氣熱、食物燙都用 hot" },
+    { word: "cold", pronunciation: "/kəʊld/", partOfSpeech: "adj", chineseMeaning: "冷的",
+      example1: "It's cold outside. Bring a jacket.", example1Translation: "外面很冷，帶件外套。",
+      example2: "My coffee got cold — can I reheat it?", example2Translation: "我的咖啡變冷了，可以加熱嗎？",
+      tip: "天氣冷、飲料冰都是 cold" },
+    { word: "late", pronunciation: "/leɪt/", partOfSpeech: "adj", chineseMeaning: "遲到的",
+      example1: "I'm going to be late!", example1Translation: "我要遲到了！",
+      example2: "Sorry I'm late — the traffic was terrible.", example2Translation: "抱歉我遲到了，塞車很嚴重。",
+      tip: "遲到說 I'm late，簡單有力" },
+    { word: "early", pronunciation: "/ˈɜː.li/", partOfSpeech: "adj", chineseMeaning: "早的",
+      example1: "Let's leave early to avoid traffic.", example1Translation: "我們早點出發避開塞車。",
+      example2: "She always arrives early to meetings.", example2Translation: "她開會總是早到。",
+      tip: "early = 早，late = 晚，一組記" },
+    { word: "fast", pronunciation: "/fɑːst/", partOfSpeech: "adj", chineseMeaning: "快的",
+      example1: "You walk so fast — slow down!", example1Translation: "你走好快，慢一點！",
+      example2: "That was fast! You finished already?", example2Translation: "那麼快！你已經做完了？",
+      tip: "fast / slow 一組記，形容速度" },
   ],
+  // 第3組：好壞與情緒
   [
-    { word: "hot", pronunciation: "/hɒt/", partOfSpeech: "adj", chineseMeaning: "熱的", example: "It's so hot today — I'm sweating!", exampleTranslation: "今天好熱，我在流汗！", tip: "天氣熱、食物燙都用 hot" },
-    { word: "cold", pronunciation: "/kəʊld/", partOfSpeech: "adj", chineseMeaning: "冷的", example: "It's cold outside. Bring a jacket.", exampleTranslation: "外面很冷，帶件外套。", tip: "天氣冷、飲料冰都是 cold" },
-    { word: "full", pronunciation: "/fʊl/", partOfSpeech: "adj", chineseMeaning: "吃飽了", example: "I'm so full. I can't eat anymore.", exampleTranslation: "我好飽，吃不下了。", tip: "吃飽了說 I'm full，簡單直接" },
+    { word: "good", pronunciation: "/ɡʊd/", partOfSpeech: "adj", chineseMeaning: "好的",
+      example1: "This food is so good!", example1Translation: "這個食物好好吃！",
+      example2: "You did a good job today.", example2Translation: "你今天做得很好。",
+      tip: "萬用稱讚詞，比 nice 更口語" },
+    { word: "bad", pronunciation: "/bæd/", partOfSpeech: "adj", chineseMeaning: "糟的",
+      example1: "Today was a really bad day.", example1Translation: "今天真的是很糟的一天。",
+      example2: "That's too bad — I hope things get better.", example2Translation: "那真糟糕，希望情況好轉。",
+      tip: "That's too bad. 聽到壞事時同理對方" },
+    { word: "happy", pronunciation: "/ˈhæp.i/", partOfSpeech: "adj", chineseMeaning: "開心的",
+      example1: "I'm so happy to see you!", example1Translation: "見到你我好開心！",
+      example2: "She was happy with the results.", example2Translation: "她對結果很滿意。",
+      tip: "I'm happy. / That makes me happy. 都超自然" },
+    { word: "sad", pronunciation: "/sæd/", partOfSpeech: "adj", chineseMeaning: "難過的",
+      example1: "I'm a bit sad today.", example1Translation: "我今天有點難過。",
+      example2: "It's sad to hear that they broke up.", example2Translation: "聽到他們分手真令人難過。",
+      tip: "That's sad. 聽到壞消息時同理對方" },
+    { word: "surprised", pronunciation: "/səˈpraɪzd/", partOfSpeech: "adj", chineseMeaning: "驚訝的",
+      example1: "I was so surprised by the news!", example1Translation: "我對那個消息感到非常驚訝！",
+      example2: "What a surprise — I didn't expect to see you here!", example2Translation: "真是驚喜，沒想到在這裡見到你！",
+      tip: "What a surprise! 遇到意外情況時說" },
   ],
+  // 第4組：基本動詞
   [
-    { word: "good", pronunciation: "/ɡʊd/", partOfSpeech: "adj", chineseMeaning: "好的", example: "This food is so good!", exampleTranslation: "這個食物好好吃！", tip: "萬用稱讚詞，比 nice 更口語" },
-    { word: "bad", pronunciation: "/bæd/", partOfSpeech: "adj", chineseMeaning: "糟的", example: "Today was a really bad day.", exampleTranslation: "今天真的是很糟的一天。", tip: "That's bad. / That's too bad. 都超常用" },
-    { word: "okay", pronunciation: "/ˌəʊˈkeɪ/", partOfSpeech: "adj", chineseMeaning: "還好、可以", example: "Are you okay? You look tired.", exampleTranslation: "你還好嗎？你看起來很累。", tip: "OK / okay 可以問人、也可以回答" },
+    { word: "want", pronunciation: "/wɒnt/", partOfSpeech: "verb", chineseMeaning: "想要",
+      example1: "I want coffee. Do you want some too?", example1Translation: "我想喝咖啡，你也要嗎？",
+      example2: "What do you want to do this weekend?", example2Translation: "你這週末想做什麼？",
+      tip: "I want... 最直接表達需求的方式" },
+    { word: "need", pronunciation: "/niːd/", partOfSpeech: "verb", chineseMeaning: "需要",
+      example1: "I need to sleep. I'm exhausted.", example1Translation: "我需要睡覺，我累壞了。",
+      example2: "Do you need help with that?", example2Translation: "你需要幫忙嗎？",
+      tip: "need 比 want 更急迫，是「必須要」" },
+    { word: "like", pronunciation: "/laɪk/", partOfSpeech: "verb", chineseMeaning: "喜歡",
+      example1: "I like this place — it's really cozy.", example1Translation: "我喜歡這個地方，很溫馨。",
+      example2: "Do you like spicy food?", example2Translation: "你喜歡吃辣嗎？",
+      tip: "Do you like...? 是聊天最好用的開場" },
+    { word: "think", pronunciation: "/θɪŋk/", partOfSpeech: "verb", chineseMeaning: "覺得、認為",
+      example1: "I think this is a good idea.", example1Translation: "我覺得這是個好主意。",
+      example2: "What do you think about the new menu?", example2Translation: "你覺得新菜單怎麼樣？",
+      tip: "I think... 表達意見時的萬用開頭" },
+    { word: "know", pronunciation: "/nəʊ/", partOfSpeech: "verb", chineseMeaning: "知道",
+      example1: "I don't know. Let me check.", example1Translation: "我不知道，讓我查一下。",
+      example2: "You know what? Let's just order pizza.", example2Translation: "你知道嗎？我們就叫披薩吧。",
+      tip: "I don't know. / I know! 日常超高頻" },
   ],
+  // 第5組：禮貌用語
   [
-    { word: "want", pronunciation: "/wɒnt/", partOfSpeech: "verb", chineseMeaning: "想要", example: "I want coffee. Do you want some too?", exampleTranslation: "我想喝咖啡，你也要嗎？", tip: "I want... 是最直接表達需求的方式" },
-    { word: "need", pronunciation: "/niːd/", partOfSpeech: "verb", chineseMeaning: "需要", example: "I need to sleep. I'm exhausted.", exampleTranslation: "我需要睡覺，我累壞了。", tip: "need 比 want 更急迫，是「必須要」" },
-    { word: "like", pronunciation: "/laɪk/", partOfSpeech: "verb", chineseMeaning: "喜歡", example: "I like this place — it's really cozy.", exampleTranslation: "我喜歡這個地方，很溫馨。", tip: "Do you like...? 是聊天最好用的開場" },
+    { word: "please", pronunciation: "/pliːz/", partOfSpeech: "adv", chineseMeaning: "請",
+      example1: "Can I have the menu, please?", example1Translation: "請給我菜單好嗎？",
+      example2: "Please wait a moment.", example2Translation: "請稍等一下。",
+      tip: "句尾加 please 讓任何請求都更有禮貌" },
+    { word: "sorry", pronunciation: "/ˈsɒr.i/", partOfSpeech: "interjection", chineseMeaning: "抱歉",
+      example1: "Sorry, I'm late!", example1Translation: "抱歉，我遲到了！",
+      example2: "I'm sorry to hear that.", example2Translation: "聽到這個消息我很遺憾。",
+      tip: "Sorry! 一個字就夠，不需要長篇道歉" },
+    { word: "thank you", pronunciation: "/ˈθæŋk juː/", partOfSpeech: "phrase", chineseMeaning: "謝謝",
+      example1: "Thank you so much for your help!", example1Translation: "非常感謝你的幫忙！",
+      example2: "Thank you for waiting.", example2Translation: "謝謝你等我。",
+      tip: "Thanks 更口語，Thank you 更正式，都對" },
+    { word: "excuse me", pronunciation: "/ɪkˈskjuːz miː/", partOfSpeech: "phrase", chineseMeaning: "不好意思",
+      example1: "Excuse me, where is the bathroom?", example1Translation: "不好意思，廁所在哪裡？",
+      example2: "Excuse me, is this seat taken?", example2Translation: "不好意思，這個位子有人嗎？",
+      tip: "問路、借過、打斷別人都用這句" },
+    { word: "no problem", pronunciation: "/nəʊ ˈprɒb.ləm/", partOfSpeech: "phrase", chineseMeaning: "沒問題",
+      example1: "Can you help me? — No problem!", example1Translation: "你可以幫我嗎？— 沒問題！",
+      example2: "Thanks for covering for me. — No problem at all!", example2Translation: "謝謝你幫我代班。— 完全沒問題！",
+      tip: "比 you're welcome 更口語的回應方式" },
   ],
+  // 第6組：強調副詞
   [
-    { word: "think", pronunciation: "/θɪŋk/", partOfSpeech: "verb", chineseMeaning: "覺得、認為", example: "I think this is a good idea.", exampleTranslation: "我覺得這是個好主意。", tip: "I think... 表達意見時的萬用開頭" },
-    { word: "know", pronunciation: "/nəʊ/", partOfSpeech: "verb", chineseMeaning: "知道", example: "I don't know. Let me check.", exampleTranslation: "我不知道，讓我查一下。", tip: "I don't know. / I know! 日常超高頻" },
-    { word: "sorry", pronunciation: "/ˈsɒr.i/", partOfSpeech: "interjection", chineseMeaning: "抱歉", example: "Sorry, I'm late!", exampleTranslation: "抱歉，我遲到了！", tip: "Sorry! 一個字就夠，不需要長篇道歉" },
+    { word: "really", pronunciation: "/ˈrɪəl.i/", partOfSpeech: "adv", chineseMeaning: "真的、非常",
+      example1: "This is really delicious!", example1Translation: "這個真的很好吃！",
+      example2: "I really don't want to go out tonight.", example2Translation: "我今晚真的不想出去。",
+      tip: "加在形容詞或動詞前面強調語氣" },
+    { word: "very", pronunciation: "/ˈver.i/", partOfSpeech: "adv", chineseMeaning: "非常",
+      example1: "I'm very happy today.", example1Translation: "我今天非常開心。",
+      example2: "That's very kind of you.", example2Translation: "你真的太好心了。",
+      tip: "very 跟 really 用法一樣，可以互換" },
+    { word: "totally", pronunciation: "/ˈtəʊ.tə.li/", partOfSpeech: "adv", chineseMeaning: "完全、超級",
+      example1: "I totally forgot about it!", example1Translation: "我完全忘記這件事了！",
+      example2: "I totally agree with you.", example2Translation: "我完全同意你的說法。",
+      tip: "I totally agree. / I totally forgot. 超口語" },
+    { word: "seriously", pronunciation: "/ˈsɪər.i.əs.li/", partOfSpeech: "adv", chineseMeaning: "真的假的",
+      example1: "Seriously? You ate the whole thing?", example1Translation: "真的假的？你全部都吃掉了？",
+      example2: "I'm seriously so tired right now.", example2Translation: "我現在真的超級累。",
+      tip: "表示不敢相信，語氣很豐富" },
+    { word: "actually", pronunciation: "/ˈæk.tʃu.ə.li/", partOfSpeech: "adv", chineseMeaning: "其實",
+      example1: "Actually, I changed my mind.", example1Translation: "其實，我改變主意了。",
+      example2: "I actually liked it more than I expected.", example2Translation: "我其實比預期更喜歡它。",
+      tip: "要說出與對方預期不同的話前，先說 actually" },
   ],
+  // 第7組：移動與動作
   [
-    { word: "please", pronunciation: "/pliːz/", partOfSpeech: "adv", chineseMeaning: "請", example: "Can I have the menu, please?", exampleTranslation: "請給我菜單好嗎？", tip: "句尾加 please 讓任何請求都更有禮貌" },
-    { word: "thank you", pronunciation: "/ˈθæŋk juː/", partOfSpeech: "phrase", chineseMeaning: "謝謝", example: "Thank you so much for your help!", exampleTranslation: "非常感謝你的幫忙！", tip: "Thanks 更口語，Thank you 更正式，都對" },
-    { word: "excuse me", pronunciation: "/ɪkˈskjuːz miː/", partOfSpeech: "phrase", chineseMeaning: "不好意思", example: "Excuse me, where is the bathroom?", exampleTranslation: "不好意思，廁所在哪裡？", tip: "問路、借過、打斷別人都用這句" },
+    { word: "go", pronunciation: "/ɡəʊ/", partOfSpeech: "verb", chineseMeaning: "走、去",
+      example1: "Let's go! We're going to be late.", example1Translation: "走吧！我們要遲到了。",
+      example2: "Where do you want to go for lunch?", example2Translation: "你午餐想去哪裡？",
+      tip: "Let's go! 是最有能量的出發號令" },
+    { word: "come", pronunciation: "/kʌm/", partOfSpeech: "verb", chineseMeaning: "來",
+      example1: "Come here, look at this!", example1Translation: "來這裡，看看這個！",
+      example2: "Can you come over later?", example2Translation: "你待會可以過來嗎？",
+      tip: "Come on! = 快點！Come here! = 過來！" },
+    { word: "wait", pronunciation: "/weɪt/", partOfSpeech: "verb", chineseMeaning: "等一下",
+      example1: "Wait! I forgot my phone.", example1Translation: "等一下！我忘記帶手機了。",
+      example2: "Sorry to keep you waiting.", example2Translation: "抱歉讓你久等了。",
+      tip: "Wait! 一個字就能叫人停下來" },
+    { word: "try", pronunciation: "/traɪ/", partOfSpeech: "verb", chineseMeaning: "試試看",
+      example1: "Just try it — you might like it!", example1Translation: "試試看，你可能會喜歡的！",
+      example2: "Have you tried the new ramen place?", example2Translation: "你試過那家新的拉麵店嗎？",
+      tip: "鼓勵別人嘗試說 Just try it!" },
+    { word: "help", pronunciation: "/help/", partOfSpeech: "verb", chineseMeaning: "幫忙",
+      example1: "Can you help me with this?", example1Translation: "你可以幫我做這個嗎？",
+      example2: "Is there anything I can help you with?", example2Translation: "有什麼我可以幫你的嗎？",
+      tip: "Can you help me? 求助萬用句" },
   ],
+  // 第8組：日常動作
   [
-    { word: "really", pronunciation: "/ˈrɪəl.i/", partOfSpeech: "adv", chineseMeaning: "真的、非常", example: "This is really delicious!", exampleTranslation: "這個真的很好吃！", tip: "加在形容詞前面強調語氣，超常用" },
-    { word: "very", pronunciation: "/ˈver.i/", partOfSpeech: "adv", chineseMeaning: "非常", example: "I'm very happy today.", exampleTranslation: "我今天非常開心。", tip: "very 跟 really 用法一樣，可以互換" },
-    { word: "too", pronunciation: "/tuː/", partOfSpeech: "adv", chineseMeaning: "太（過分）", example: "This is too spicy for me!", exampleTranslation: "這對我來說太辣了！", tip: "too hot / too spicy / too expensive 超常用" },
+    { word: "eat", pronunciation: "/iːt/", partOfSpeech: "verb", chineseMeaning: "吃",
+      example1: "Have you eaten yet?", example1Translation: "你吃了嗎？",
+      example2: "Let's eat out tonight.", example2Translation: "我們今晚去外面吃吧。",
+      tip: "Have you eaten? 台灣人最熟悉的關心句！" },
+    { word: "drink", pronunciation: "/drɪŋk/", partOfSpeech: "verb", chineseMeaning: "喝",
+      example1: "What do you want to drink?", example1Translation: "你想喝什麼？",
+      example2: "I need to drink more water.", example2Translation: "我需要多喝水。",
+      tip: "點飲料時直接說 I want..." },
+    { word: "sleep", pronunciation: "/sliːp/", partOfSpeech: "verb", chineseMeaning: "睡覺",
+      example1: "I need to sleep. I'm so tired.", example1Translation: "我需要睡覺，我好累。",
+      example2: "I only slept four hours last night.", example2Translation: "我昨晚只睡了四個小時。",
+      tip: "Go to sleep. = 去睡覺。I slept well. = 我睡得很好。" },
+    { word: "work", pronunciation: "/wɜːk/", partOfSpeech: "verb", chineseMeaning: "工作",
+      example1: "I work from 9 to 6 every day.", example1Translation: "我每天9點到6點上班。",
+      example2: "Are you still working? It's almost midnight!", example2Translation: "你還在工作？都快午夜了！",
+      tip: "go to work = 去上班" },
+    { word: "buy", pronunciation: "/baɪ/", partOfSpeech: "verb", chineseMeaning: "買",
+      example1: "I want to buy a new phone.", example1Translation: "我想買一支新手機。",
+      example2: "I'll buy the coffee this time.", example2Translation: "這次咖啡我請。",
+      tip: "I'll buy it. 購物決定的那一刻就說這句" },
   ],
+  // 第9組：時間副詞
   [
-    { word: "here", pronunciation: "/hɪər/", partOfSpeech: "adv", chineseMeaning: "這裡", example: "I'm here! Sorry I'm late.", exampleTranslation: "我到了！抱歉我遲到了。", tip: "I'm here. 到達某地打招呼用" },
-    { word: "wait", pronunciation: "/weɪt/", partOfSpeech: "verb", chineseMeaning: "等一下", example: "Wait! I forgot my phone.", exampleTranslation: "等一下！我忘記帶手機了。", tip: "Wait! 一個字就能叫人停下來" },
-    { word: "help", pronunciation: "/help/", partOfSpeech: "verb", chineseMeaning: "幫忙", example: "Can you help me with this?", exampleTranslation: "你可以幫我做這個嗎？", tip: "Can you help me? 求助萬用句" },
+    { word: "today", pronunciation: "/təˈdeɪ/", partOfSpeech: "adv", chineseMeaning: "今天",
+      example1: "What are you doing today?", example1Translation: "你今天要做什麼？",
+      example2: "I have a meeting today at 3.", example2Translation: "我今天3點有個會議。",
+      tip: "today / tomorrow / yesterday 三個一起記" },
+    { word: "tomorrow", pronunciation: "/təˈmɒr.əʊ/", partOfSpeech: "adv", chineseMeaning: "明天",
+      example1: "Let's do it tomorrow instead.", example1Translation: "我們改明天做吧。",
+      example2: "I have an early flight tomorrow.", example2Translation: "我明天有早班飛機。",
+      tip: "See you tomorrow! 分別時常說的一句" },
+    { word: "now", pronunciation: "/naʊ/", partOfSpeech: "adv", chineseMeaning: "現在",
+      example1: "I can't talk right now.", example1Translation: "我現在沒辦法說話。",
+      example2: "What do you feel like eating now?", example2Translation: "你現在想吃什麼？",
+      tip: "right now 比 now 更強調「就是現在」" },
+    { word: "always", pronunciation: "/ˈɔːl.weɪz/", partOfSpeech: "adv", chineseMeaning: "總是",
+      example1: "She's always late!", example1Translation: "她總是遲到！",
+      example2: "I always have coffee in the morning.", example2Translation: "我早上總是要喝咖啡。",
+      tip: "always / sometimes / never 三個頻率詞一起記" },
+    { word: "never", pronunciation: "/ˈnev.ər/", partOfSpeech: "adv", chineseMeaning: "從不",
+      example1: "I never skip breakfast.", example1Translation: "我從不跳過早餐。",
+      example2: "I've never been to Japan.", example2Translation: "我從來沒去過日本。",
+      tip: "I never... 表示「我絕對不會...」" },
   ],
+  // 第10組：口語片語入門
   [
-    { word: "go", pronunciation: "/ɡəʊ/", partOfSpeech: "verb", chineseMeaning: "走、去", example: "Let's go! We're going to be late.", exampleTranslation: "走吧！我們要遲到了。", tip: "Let's go! 是最有能量的出發號令" },
-    { word: "come", pronunciation: "/kʌm/", partOfSpeech: "verb", chineseMeaning: "來", example: "Come here, look at this!", exampleTranslation: "來這裡，看看這個！", tip: "Come on! = 快點！Come here! = 過來！" },
-    { word: "take", pronunciation: "/teɪk/", partOfSpeech: "verb", chineseMeaning: "拿、花（時間）", example: "It takes 30 minutes to get there.", exampleTranslation: "到那裡要花30分鐘。", tip: "It takes... 說時間最常用的句型" },
+    { word: "hang out", pronunciation: "/hæŋ aʊt/", partOfSpeech: "phrase", chineseMeaning: "出去玩",
+      example1: "Want to hang out this weekend?", example1Translation: "這週末要出來玩嗎？",
+      example2: "We used to hang out every Friday.", example2Translation: "我們以前每個週五都會出去玩。",
+      tip: "沒有特別計畫的輕鬆相聚就是 hang out" },
+    { word: "no way", pronunciation: "/nəʊ weɪ/", partOfSpeech: "phrase", chineseMeaning: "不可能",
+      example1: "No way — that's so cheap!", example1Translation: "不可能，那麼便宜！",
+      example2: "No way am I eating that.", example2Translation: "我絕對不會吃那個的。",
+      tip: "驚訝或拒絕都可以用，語氣決定意思" },
+    { word: "come on", pronunciation: "/kʌm ɒn/", partOfSpeech: "phrase", chineseMeaning: "快點、拜託",
+      example1: "Come on, we're going to be late!", example1Translation: "快點，我們要遲到了！",
+      example2: "Come on, it's not that hard!", example2Translation: "拜託，沒那麼難啦！",
+      tip: "催促別人快點或表示「拜託一下」" },
+    { word: "kind of", pronunciation: "/kaɪnd əv/", partOfSpeech: "phrase", chineseMeaning: "有點",
+      example1: "It's kind of cold today, right?", example1Translation: "今天有點冷，對吧？",
+      example2: "I'm kind of tired — can we go home?", example2Translation: "我有點累了，我們可以回家嗎？",
+      tip: "口語常說 kinda，讓語氣變得比較軟" },
+    { word: "sounds good", pronunciation: "/saʊndz ɡʊd/", partOfSpeech: "phrase", chineseMeaning: "聽起來不錯",
+      example1: "Let's meet at 7? — Sounds good!", example1Translation: "7點見？— 聽起來不錯！",
+      example2: "Grab dinner first, then movie? — Sounds good to me!", example2Translation: "先吃晚餐再看電影？— 我覺得不錯！",
+      tip: "同意對方提議時最自然的回應" },
   ],
+  // 第11組：口語片語進階
   [
-    { word: "eat", pronunciation: "/iːt/", partOfSpeech: "verb", chineseMeaning: "吃", example: "Have you eaten yet?", exampleTranslation: "你吃了嗎？", tip: "Have you eaten? 台灣人最熟悉的關心句！" },
-    { word: "drink", pronunciation: "/drɪŋk/", partOfSpeech: "verb", chineseMeaning: "喝", example: "What do you want to drink?", exampleTranslation: "你想喝什麼？", tip: "點飲料時直接說 I want..." },
-    { word: "sleep", pronunciation: "/sliːp/", partOfSpeech: "verb", chineseMeaning: "睡覺", example: "I need to sleep. I'm so tired.", exampleTranslation: "我需要睡覺，我好累。", tip: "Go to sleep. = 去睡覺。I slept well. = 我睡得很好。" },
+    { word: "grab", pronunciation: "/ɡræb/", partOfSpeech: "verb", chineseMeaning: "去吃、順手拿",
+      example1: "Let's grab some coffee before the meeting.", example1Translation: "開會前我們去喝杯咖啡吧。",
+      example2: "Can you grab me a water bottle?", example2Translation: "你可以幫我拿一瓶水嗎？",
+      tip: "grab lunch / grab a drink 隨興找東西吃喝" },
+    { word: "end up", pronunciation: "/end ʌp/", partOfSpeech: "phrase", chineseMeaning: "最後結果是",
+      example1: "We got lost and ended up at a park.", example1Translation: "我們迷路，最後跑到一個公園。",
+      example2: "I ended up staying home all weekend.", example2Translation: "我結果整個週末都待在家。",
+      tip: "形容預料之外的結果，超好用" },
+    { word: "run out of", pronunciation: "/rʌn aʊt əv/", partOfSpeech: "phrase", chineseMeaning: "用完了",
+      example1: "I ran out of shampoo.", example1Translation: "我的洗髮精用完了。",
+      example2: "We ran out of time before finishing.", example2Translation: "我們時間不夠，沒做完就結束了。",
+      tip: "run out of time / money / battery 都超常用" },
+    { word: "give up", pronunciation: "/ɡɪv ʌp/", partOfSpeech: "phrase", chineseMeaning: "放棄",
+      example1: "Don't give up — you're almost there!", example1Translation: "不要放棄，你快到了！",
+      example2: "She gave up trying to fix it.", example2Translation: "她放棄嘗試修它了。",
+      tip: "Don't give up! 鼓勵別人最有力的一句" },
+    { word: "worth it", pronunciation: "/wɜːθ ɪt/", partOfSpeech: "phrase", chineseMeaning: "值得的",
+      example1: "The wait was long but totally worth it.", example1Translation: "等了很久但完全值得。",
+      example2: "It's expensive, but trust me — it's worth it.", example2Translation: "很貴，但相信我，值得的。",
+      tip: "付出代價之後覺得划算就說 worth it" },
   ],
+  // 第12組：社交與敘舊
   [
-    { word: "happy", pronunciation: "/ˈhæp.i/", partOfSpeech: "adj", chineseMeaning: "開心的", example: "I'm so happy to see you!", exampleTranslation: "見到你我好開心！", tip: "I'm happy. / That makes me happy. 都超自然" },
-    { word: "sad", pronunciation: "/sæd/", partOfSpeech: "adj", chineseMeaning: "難過的", example: "I'm a bit sad today.", exampleTranslation: "我今天有點難過。", tip: "That's sad. 聽到壞消息時同理對方" },
-    { word: "surprised", pronunciation: "/səˈpraɪzd/", partOfSpeech: "adj", chineseMeaning: "驚訝的", example: "I was so surprised by the news!", exampleTranslation: "我對那個消息感到非常驚訝！", tip: "I'm surprised! / What a surprise! 都很自然" },
+    { word: "catch up", pronunciation: "/kætʃ ʌp/", partOfSpeech: "phrase", chineseMeaning: "敘舊",
+      example1: "Let's catch up over dinner!", example1Translation: "我們去吃晚餐敘舊吧！",
+      example2: "We haven't caught up in ages!", example2Translation: "我們好久沒敘舊了！",
+      tip: "久沒見面，更新近況就叫 catch up" },
+    { word: "on the way", pronunciation: "/ɒn ðə weɪ/", partOfSpeech: "phrase", chineseMeaning: "在路上",
+      example1: "I'm on the way! Be there in 10 minutes.", example1Translation: "我在路上了！10分鐘後到。",
+      example2: "Can you pick up some milk on the way?", example2Translation: "你在路上可以順便買牛奶嗎？",
+      tip: "告訴別人你正在前往就說 I'm on the way" },
+    { word: "by the way", pronunciation: "/baɪ ðə weɪ/", partOfSpeech: "phrase", chineseMeaning: "對了",
+      example1: "By the way, did you eat yet?", example1Translation: "對了，你吃了嗎？",
+      example2: "By the way, the meeting moved to 3pm.", example2Translation: "對了，會議改到下午3點了。",
+      tip: "轉換話題或補充資訊時最自然的開頭" },
+    { word: "check out", pronunciation: "/tʃek aʊt/", partOfSpeech: "phrase", chineseMeaning: "去看看",
+      example1: "You should check out that new café.", example1Translation: "你應該去看看那家新咖啡廳。",
+      example2: "Check out this video — it's so funny.", example2Translation: "看看這個影片，好好笑。",
+      tip: "推薦別人去某地或看某東西就說 check it out" },
+    { word: "go ahead", pronunciation: "/ɡəʊ əˈhed/", partOfSpeech: "phrase", chineseMeaning: "請便、你先吧",
+      example1: "Go ahead — I'll catch up later.", example1Translation: "你先去，我等一下跟上。",
+      example2: "Go ahead and order — I know what I want.", example2Translation: "你先點，我知道我要什麼了。",
+      tip: "讓對方先行動，或許可對方的請求" },
   ],
+  // 第13組：追劇與娛樂
   [
-    { word: "always", pronunciation: "/ˈɔːl.weɪz/", partOfSpeech: "adv", chineseMeaning: "總是", example: "She's always late!", exampleTranslation: "她總是遲到！", tip: "always / sometimes / never 三個頻率詞一起記" },
-    { word: "never", pronunciation: "/ˈnev.ər/", partOfSpeech: "adv", chineseMeaning: "從不", example: "I never skip breakfast.", exampleTranslation: "我從不跳過早餐。", tip: "I never... 表示「我絕對不會...」" },
-    { word: "maybe", pronunciation: "/ˈmeɪ.bi/", partOfSpeech: "adv", chineseMeaning: "也許", example: "Maybe we can go next weekend.", exampleTranslation: "也許我們可以下個週末去。", tip: "不確定的時候說 Maybe，語氣比較軟" },
+    { word: "hooked", pronunciation: "/hʊkt/", partOfSpeech: "adj", chineseMeaning: "上癮了",
+      example1: "I'm hooked — I watched 5 episodes today.", example1Translation: "我上癮了，今天看了5集。",
+      example2: "Once you start this show, you'll be hooked.", example2Translation: "你一開始看這部劇就會上癮。",
+      tip: "像魚被鉤住，停不下來" },
+    { word: "spoiler", pronunciation: "/ˈspɔɪ.lər/", partOfSpeech: "noun", chineseMeaning: "劇透",
+      example1: "No spoilers please — I haven't watched it!", example1Translation: "不要劇透，我還沒看！",
+      example2: "Warning: major spoiler ahead.", example2Translation: "警告：前方有重大劇透。",
+      tip: "No spoilers! 看劇前必說的防劇透宣言" },
+    { word: "can't stand", pronunciation: "/kɑːnt stænd/", partOfSpeech: "phrase", chineseMeaning: "受不了",
+      example1: "I can't stand the heat today.", example1Translation: "我今天受不了這個熱。",
+      example2: "I can't stand waiting in long lines.", example2Translation: "我受不了排長隊。",
+      tip: "比 hate 更口語，表示真的忍受不了" },
+    { word: "literally", pronunciation: "/ˈlɪt.ər.ə.li/", partOfSpeech: "adv", chineseMeaning: "真的、超（強調）",
+      example1: "I'm literally dying — it's so funny.", example1Translation: "我真的笑死，太好笑了。",
+      example2: "This is literally the best meal I've ever had.", example2Translation: "這真的是我吃過最好的一餐。",
+      tip: "誇張強調用，影集裡超常聽到" },
+    { word: "obsessed", pronunciation: "/əbˈsest/", partOfSpeech: "adj", chineseMeaning: "超迷、著迷",
+      example1: "I'm obsessed with this show!", example1Translation: "我超迷這部劇！",
+      example2: "She's absolutely obsessed with bubble tea.", example2Translation: "她對珍珠奶茶完全著迷。",
+      tip: "比 love 強很多，完全停不下來的喜歡" },
   ],
+  // 第14組：鼓勵與正向
   [
-    { word: "again", pronunciation: "/əˈɡen/", partOfSpeech: "adv", chineseMeaning: "再一次", example: "Can you say that again?", exampleTranslation: "你可以再說一次嗎？", tip: "聽不懂時說 Sorry, can you say that again?" },
-    { word: "together", pronunciation: "/təˈɡeð.ər/", partOfSpeech: "adv", chineseMeaning: "一起", example: "Let's go together!", exampleTranslation: "我們一起去吧！", tip: "Let's do it together. 邀請別人最暖的說法" },
-    { word: "enough", pronunciation: "/ɪˈnʌf/", partOfSpeech: "adj", chineseMeaning: "夠了", example: "That's enough, thank you.", exampleTranslation: "夠了，謝謝。", tip: "That's enough! 也可以表示「夠了！不要再說了！」" },
+    { word: "you've got this", pronunciation: "/juːv ɡɒt ðɪs/", partOfSpeech: "phrase", chineseMeaning: "你可以的",
+      example1: "Nervous? You've got this!", example1Translation: "緊張嗎？你可以的！",
+      example2: "Stop doubting yourself — you've got this.", example2Translation: "別懷疑自己，你可以的。",
+      tip: "最有力量的鼓勵句，表達你對對方有信心" },
+    { word: "hang in there", pronunciation: "/hæŋ ɪn ðeər/", partOfSpeech: "phrase", chineseMeaning: "撐住",
+      example1: "I know it's tough — hang in there!", example1Translation: "我知道很辛苦，撐住！",
+      example2: "Hang in there — the weekend is almost here.", example2Translation: "撐住，週末快到了。",
+      tip: "別放手，繼續堅持" },
+    { word: "take it easy", pronunciation: "/teɪk ɪt ˈiː.zi/", partOfSpeech: "phrase", chineseMeaning: "放輕鬆",
+      example1: "Take it easy — there's no rush.", example1Translation: "放輕鬆，不急的。",
+      example2: "The doctor said to take it easy for a week.", example2Translation: "醫生說要休息一個禮拜。",
+      tip: "叫對方不要緊張或過度操勞" },
+    { word: "count me in", pronunciation: "/kaʊnt miː ɪn/", partOfSpeech: "phrase", chineseMeaning: "算我一份",
+      example1: "Road trip? Count me in!", example1Translation: "公路旅行？算我一份！",
+      example2: "If you're ordering pizza, count me in.", example2Translation: "如果你要叫披薩，算我一份。",
+      tip: "相反是 count me out = 我不參加" },
+    { word: "nail it", pronunciation: "/neɪl ɪt/", partOfSpeech: "phrase", chineseMeaning: "做得太棒了",
+      example1: "You nailed it! That was perfect.", example1Translation: "你做得太棒了，完美！",
+      example2: "She nailed the presentation — everyone loved it.", example2Translation: "她的簡報做得太好了，大家都喜歡。",
+      tip: "像釘子精準釘進去，一擊即中" },
   ],
+  // 第15組：更多口語
   [
-    { word: "fast", pronunciation: "/fɑːst/", partOfSpeech: "adj", chineseMeaning: "快的", example: "You walk so fast — slow down!", exampleTranslation: "你走好快，慢一點！", tip: "fast / slow 一組記，形容速度" },
-    { word: "slow", pronunciation: "/sləʊ/", partOfSpeech: "adj", chineseMeaning: "慢的", example: "The internet is so slow today.", exampleTranslation: "今天網路好慢。", tip: "Take it slow. = 慢慢來，不要急" },
-    { word: "alone", pronunciation: "/əˈləʊn/", partOfSpeech: "adj", chineseMeaning: "一個人的", example: "I went there alone.", exampleTranslation: "我一個人去的。", tip: "alone = 一個人，lonely = 感到孤單，不一樣" },
-  ],
-  [
-    { word: "hang out", pronunciation: "/hæŋ aʊt/", partOfSpeech: "phrase", chineseMeaning: "出去玩", example: "Want to hang out this weekend?", exampleTranslation: "這週末要出來玩嗎？", tip: "沒有特別計畫的輕鬆相聚就是 hang out" },
-    { word: "no way", pronunciation: "/nəʊ weɪ/", partOfSpeech: "phrase", chineseMeaning: "不可能！", example: "No way — that's so cheap!", exampleTranslation: "不可能，那麼便宜！", tip: "驚訝或拒絕都可以用，語氣決定意思" },
-    { word: "come on", pronunciation: "/kʌm ɒn/", partOfSpeech: "phrase", chineseMeaning: "快點、拜託", example: "Come on, we're going to be late!", exampleTranslation: "快點，我們要遲到了！", tip: "催促別人快點或表示「拜託一下」" },
-  ],
-  [
-    { word: "no problem", pronunciation: "/nəʊ ˈprɒb.ləm/", partOfSpeech: "phrase", chineseMeaning: "沒問題", example: "Can you help me? — No problem!", exampleTranslation: "你可以幫我嗎？— 沒問題！", tip: "比 you're welcome 更口語的回應方式" },
-    { word: "kind of", pronunciation: "/kaɪnd əv/", partOfSpeech: "phrase", chineseMeaning: "有點", example: "It's kind of cold today, right?", exampleTranslation: "今天有點冷，對吧？", tip: "口語常說 kinda，讓語氣變得比較軟" },
-    { word: "actually", pronunciation: "/ˈæk.tʃu.ə.li/", partOfSpeech: "adv", chineseMeaning: "其實", example: "Actually, I changed my mind.", exampleTranslation: "其實，我改變主意了。", tip: "要說出與對方預期不同的話前，先說 actually" },
-  ],
-  [
-    { word: "totally", pronunciation: "/ˈtəʊ.tə.li/", partOfSpeech: "adv", chineseMeaning: "完全、超級", example: "I totally forgot about it!", exampleTranslation: "我完全忘記這件事了！", tip: "I totally agree. / I totally forgot. 超口語" },
-    { word: "seriously", pronunciation: "/ˈsɪər.i.əs.li/", partOfSpeech: "adv", chineseMeaning: "真的假的", example: "Seriously? You ate the whole thing?", exampleTranslation: "真的假的？你全部都吃掉了？", tip: "表示不敢相信，語氣很豐富" },
-    { word: "literally", pronunciation: "/ˈlɪt.ər.ə.li/", partOfSpeech: "adv", chineseMeaning: "真的、超（強調）", example: "I'm literally dying — it's so funny.", exampleTranslation: "我真的笑死，太好笑了。", tip: "誇張強調用，影集裡超常聽到" },
-  ],
-  [
-    { word: "grab", pronunciation: "/ɡræb/", partOfSpeech: "verb", chineseMeaning: "去吃、順手拿", example: "Let's grab some coffee.", exampleTranslation: "我們去喝杯咖啡吧。", tip: "grab lunch / grab a drink 隨興找東西吃喝" },
-    { word: "end up", pronunciation: "/end ʌp/", partOfSpeech: "phrase", chineseMeaning: "最後結果是", example: "We got lost and ended up at a park.", exampleTranslation: "我們迷路，最後跑到一個公園。", tip: "形容預料之外的結果，超好用" },
-    { word: "worth it", pronunciation: "/wɜːθ ɪt/", partOfSpeech: "phrase", chineseMeaning: "值得的", example: "The wait was long but totally worth it.", exampleTranslation: "等了很久但完全值得。", tip: "付出代價之後覺得划算就說 worth it" },
-  ],
-  [
-    { word: "catch up", pronunciation: "/kætʃ ʌp/", partOfSpeech: "phrase", chineseMeaning: "敘舊", example: "Let's catch up over dinner!", exampleTranslation: "我們去吃晚餐敘舊吧！", tip: "久沒見面，更新近況就叫 catch up" },
-    { word: "give up", pronunciation: "/ɡɪv ʌp/", partOfSpeech: "phrase", chineseMeaning: "放棄", example: "Don't give up — you're almost there!", exampleTranslation: "不要放棄，你快到了！", tip: "Don't give up! 鼓勵別人最有力的一句" },
-    { word: "hang in there", pronunciation: "/hæŋ ɪn ðeər/", partOfSpeech: "phrase", chineseMeaning: "撐住、加油", example: "I know it's tough — hang in there!", exampleTranslation: "我知道很辛苦，撐住！", tip: "別放手，繼續堅持" },
-  ],
-  [
-    { word: "you've got this", pronunciation: "/juːv ɡɒt ðɪs/", partOfSpeech: "phrase", chineseMeaning: "你可以的！", example: "Nervous? You've got this!", exampleTranslation: "緊張嗎？你可以的！", tip: "最有力量的鼓勵句" },
-    { word: "take it easy", pronunciation: "/teɪk ɪt ˈiː.zi/", partOfSpeech: "phrase", chineseMeaning: "放輕鬆", example: "Take it easy — there's no rush.", exampleTranslation: "放輕鬆，不急的。", tip: "叫對方不要緊張或過度操勞" },
-    { word: "by the way", pronunciation: "/baɪ ðə weɪ/", partOfSpeech: "phrase", chineseMeaning: "對了", example: "By the way, did you eat yet?", exampleTranslation: "對了，你吃了嗎？", tip: "轉換話題或補充資訊時最自然的開頭" },
+    { word: "fed up", pronunciation: "/fed ʌp/", partOfSpeech: "phrase", chineseMeaning: "受夠了",
+      example1: "I'm so fed up with the traffic here.", example1Translation: "我對這裡的塞車真的受夠了。",
+      example2: "She was fed up and decided to quit.", example2Translation: "她受夠了，決定辭職。",
+      tip: "被餵到飽，受不了了 = fed up" },
+    { word: "pumped", pronunciation: "/pʌmpt/", partOfSpeech: "adj", chineseMeaning: "超興奮",
+      example1: "I'm so pumped for the concert!", example1Translation: "我對演唱會超興奮！",
+      example2: "Everyone was pumped after the team won.", example2Translation: "球隊贏了之後大家都超亢奮。",
+      tip: "像被打了氣一樣充滿能量，很正面的興奮" },
+    { word: "out of nowhere", pronunciation: "/aʊt əv ˈnəʊ.weər/", partOfSpeech: "phrase", chineseMeaning: "突然、毫無預警",
+      example1: "Out of nowhere, it started raining.", example1Translation: "突然就開始下雨了。",
+      example2: "Out of nowhere, he showed up at the door.", example2Translation: "他毫無預警地出現在門口。",
+      tip: "從沒有地方冒出來 = 毫無預警地發生" },
+    { word: "on the same page", pronunciation: "/ɒn ðə seɪm peɪdʒ/", partOfSpeech: "phrase", chineseMeaning: "有共識",
+      example1: "Are we on the same page about the plan?", example1Translation: "我們對這個計畫有共識嗎？",
+      example2: "Let's make sure everyone is on the same page.", example2Translation: "我們確認一下大家都有共識。",
+      tip: "大家看同一頁，代表理解一致" },
+    { word: "better late than never", pronunciation: "/ˈbet.ər leɪt ðæn ˈnev.ər/", partOfSpeech: "phrase", chineseMeaning: "遲到總比沒到好",
+      example1: "You finally came! Better late than never.", example1Translation: "你終於來了！遲到總比沒到好。",
+      example2: "I finally started exercising — better late than never!", example2Translation: "我終於開始運動了，遲到總比沒到好！",
+      tip: "晚一點做比完全不做好，英文諺語" },
   ],
 ];
 
@@ -125,14 +373,21 @@ const CARD_COLORS = [
   { bg: "#1a1a2e", accent: "#e94560", light: "#16213e" },
   { bg: "#0f3460", accent: "#f5a623", light: "#1a4a7a" },
   { bg: "#1b4332", accent: "#52b788", light: "#2d6a4f" },
+  { bg: "#3d0c02", accent: "#ff6b35", light: "#5c1a10" },
+  { bg: "#240046", accent: "#c77dff", light: "#3c096c" },
 ];
 
 const GROUP_LABELS = [
-  "累・餓・忙","早・晚・準備好","冷熱・吃飽","好壞・還好","想要・需要・喜歡",
-  "覺得・知道・抱歉","請・謝謝・不好意思","真的・非常・太","這裡・等一下・幫忙","走・來・花時間",
-  "吃・喝・睡","開心・難過・驚訝","總是・從不・也許","再一次・一起・夠了","快・慢・一個人",
-  "hang out・no way・come on","no problem・kind of・actually","totally・seriously・literally",
-  "grab・end up・worth it","catch up・give up・hang in there","you've got this・take it easy・by the way",
+  "累・餓・忙・飽・準備好","熱・冷・遲到・早・快","好・壞・開心・難過・驚訝",
+  "想要・需要・喜歡・覺得・知道","請・抱歉・謝謝・不好意思・沒問題",
+  "really・very・totally・seriously・actually","go・come・wait・try・help",
+  "eat・drink・sleep・work・buy","today・tomorrow・now・always・never",
+  "hang out・no way・come on・kind of・sounds good",
+  "grab・end up・run out of・give up・worth it",
+  "catch up・on the way・by the way・check out・go ahead",
+  "hooked・spoiler・can't stand・literally・obsessed",
+  "you've got this・hang in there・take it easy・count me in・nail it",
+  "fed up・pumped・out of nowhere・on the same page・better late than never",
 ];
 
 function getDaySet() {
@@ -141,6 +396,34 @@ function getDaySet() {
   today.setHours(0, 0, 0, 0);
   const diff = Math.floor((today - start) / 86400000);
   return Math.abs(diff) % WORD_BANK.length;
+}
+
+// ── 嚴格發音比對 ──
+function strictMatch(heard, target) {
+  const normalize = s => s.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+  const h = normalize(heard);
+  const t = normalize(target);
+  // 完全一致
+  if (h === t) return true;
+  // 目標詞是多字片語（如 hang out），任何一個字完全匹配且包含主要詞就算對
+  const targetWords = t.split(" ");
+  const heardWords = h.split(" ");
+  if (targetWords.length > 1) {
+    // 每個目標詞都要在聽到的詞裡出現
+    return targetWords.every(tw => heardWords.some(hw => hw === tw));
+  }
+  // 單字：必須完全相同，允許差一個字母（應對口音）
+  if (h === t) return true;
+  if (Math.abs(h.length - t.length) > 2) return false;
+  // 計算編輯距離
+  let diff = 0;
+  const shorter = h.length < t.length ? h : t;
+  const longer = h.length < t.length ? t : h;
+  for (let i = 0; i < shorter.length; i++) {
+    if (shorter[i] !== longer[i]) diff++;
+  }
+  diff += longer.length - shorter.length;
+  return diff <= 1;
 }
 
 function SpeakBtn({ text, label, accent, rate }) {
@@ -164,10 +447,10 @@ function SpeakBtn({ text, label, accent, rate }) {
       background: playing ? `${accent}33` : "rgba(255,255,255,0.08)",
       border:`1px solid ${playing ? accent : "rgba(255,255,255,0.15)"}`,
       color: playing ? accent : "rgba(255,255,255,0.6)",
-      borderRadius:"20px", padding:"5px 12px", fontSize:"12px", cursor:"pointer",
-      transition:"all 0.2s", fontFamily:"monospace"
+      borderRadius:"20px", padding:"6px 14px", fontSize:"13px", cursor:"pointer",
+      transition:"all 0.2s", WebkitTapHighlightColor:"transparent"
     }}>
-      <span style={{fontSize:"14px"}}>{playing ? "🔊" : "🔈"}</span>{label}
+      <span style={{fontSize:"15px"}}>{playing ? "🔊" : "🔈"}</span>{label}
     </button>
   );
 }
@@ -176,12 +459,9 @@ function SpeechPractice({ word, accent }) {
   const [status, setStatus] = useState("idle");
   const [heard, setHeard] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [attempts, setAttempts] = useState(0);
   const recRef = useRef(null);
   const gotResultRef = useRef(false);
-
-  function normalize(str) {
-    return str.toLowerCase().replace(/[^a-z\s]/g, "").trim();
-  }
 
   function startListening() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -190,18 +470,17 @@ function SpeechPractice({ word, accent }) {
     setStatus("listening"); setHeard(""); setErrorMsg(""); gotResultRef.current = false;
     const rec = new SR();
     recRef.current = rec;
-    rec.lang = "en-US"; rec.interimResults = false; rec.continuous = false; rec.maxAlternatives = 3;
+    rec.lang = "en-US"; rec.interimResults = false; rec.continuous = false; rec.maxAlternatives = 5;
     rec.onresult = (e) => {
       gotResultRef.current = true;
       const transcripts = [];
       for (let i = 0; i < e.results.length; i++)
         for (let j = 0; j < e.results[i].length; j++)
-          transcripts.push(normalize(e.results[i][j].transcript));
-      setHeard(transcripts[0] || "");
-      const target = normalize(word);
-      const matched = transcripts.some(t =>
-        t.split(" ").some(tw => target.split(" ").some(tr => tw === tr || tw.includes(tr) || tr.includes(tw)))
-      );
+          transcripts.push(e.results[i][j].transcript);
+      const best = transcripts[0] || "";
+      setHeard(best);
+      setAttempts(a => a + 1);
+      const matched = transcripts.some(t => strictMatch(t, word));
       setStatus(matched ? "success" : "fail");
     };
     rec.onerror = (e) => {
@@ -220,57 +499,76 @@ function SpeechPractice({ word, accent }) {
   function reset() { setStatus("idle"); setHeard(""); setErrorMsg(""); gotResultRef.current = false; }
 
   if (status === "unsupported") return (
-    <div style={{ padding:"12px", background:"rgba(255,255,255,0.04)", borderRadius:"10px", fontSize:"12px", color:"#666", textAlign:"center", marginBottom:"14px" }}>
-      ⚠️ 此瀏覽器不支援語音辨識，建議用 Chrome
+    <div style={{ padding:"14px", background:"rgba(255,100,100,0.08)", borderRadius:"12px", fontSize:"13px", color:"#f5a623", textAlign:"center", marginBottom:"14px" }}>
+      ⚠️ 請用 <strong>Chrome 瀏覽器</strong> 開啟此頁面才能使用跟讀功能
     </div>
   );
 
   return (
-    <div style={{ padding:"16px", background:"rgba(255,255,255,0.04)", borderRadius:"12px", marginBottom:"14px" }}>
-      <div style={{ fontSize:"10px", letterSpacing:"2px", color:accent, textTransform:"uppercase", marginBottom:"10px", fontFamily:"monospace" }}>🎤 跟讀練習</div>
-      <div style={{ fontSize:"12px", color:"rgba(255,255,255,0.5)", marginBottom:"14px", lineHeight:"1.6" }}>
-        ① 先聽發音　② 跟著念　③ 按麥克風，AI 判斷對不對
+    <div style={{ padding:"16px", background:"rgba(255,255,255,0.04)", borderRadius:"14px", marginBottom:"14px" }}>
+      <div style={{ fontSize:"11px", letterSpacing:"2px", color:accent, textTransform:"uppercase", marginBottom:"12px" }}>
+        🎤 跟讀練習 {attempts > 0 && <span style={{color:"#666"}}>（已練習 {attempts} 次）</span>}
       </div>
-      <div style={{ display:"flex", gap:"8px", alignItems:"center", flexWrap:"wrap" }}>
-        <SpeakBtn text={word} label="① 聽發音" accent={accent} rate={0.7} />
+      <div style={{ fontSize:"13px", color:"rgba(255,255,255,0.5)", marginBottom:"14px", lineHeight:"1.7" }}>
+        ① 聽發音　② 模仿跟念　③ 按麥克風，AI 嚴格判斷
+      </div>
+      <div style={{ display:"flex", gap:"10px", alignItems:"center", flexWrap:"wrap" }}>
+        <SpeakBtn text={word} label="① 聽發音" accent={accent} rate={0.65} />
+
         {status === "idle" && (
-          <button onClick={startListening} style={{ display:"inline-flex", alignItems:"center", gap:"6px", background:accent, border:"none", color:"#fff", borderRadius:"20px", padding:"6px 16px", fontSize:"12px", cursor:"pointer", fontWeight:"600" }}>🎤 ② 我來念</button>
+          <button onClick={startListening} style={{
+            display:"inline-flex", alignItems:"center", gap:"7px",
+            background:accent, border:"none", color:"#fff",
+            borderRadius:"20px", padding:"7px 18px", fontSize:"13px",
+            cursor:"pointer", fontWeight:"700", WebkitTapHighlightColor:"transparent"
+          }}>🎤 ② 我來念</button>
         )}
+
         {status === "listening" && (
-          <div style={{ display:"inline-flex", alignItems:"center", gap:"8px" }}>
-            <span style={{ color:"#f5a623", fontSize:"12px" }}>🔴 聆聽中，請念出單字...</span>
-            <button onClick={reset} style={{ background:"none", border:"1px solid rgba(255,255,255,0.15)", color:"#666", borderRadius:"10px", padding:"3px 10px", fontSize:"11px", cursor:"pointer" }}>取消</button>
+          <div style={{ display:"flex", alignItems:"center", gap:"10px", flex:1 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"6px", color:"#f5a623", fontSize:"13px" }}>
+              <span style={{ animation:"pulse 0.6s infinite", fontSize:"18px" }}>🔴</span>
+              聆聽中...
+            </div>
+            <button onClick={reset} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"#888", borderRadius:"10px", padding:"5px 12px", fontSize:"12px", cursor:"pointer" }}>取消</button>
           </div>
         )}
+
         {status === "success" && (
-          <div style={{ display:"flex", flexDirection:"column", gap:"8px", flex:1 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-              <span style={{ fontSize:"22px" }}>✅</span>
-              <span style={{ color:"#52b788", fontSize:"14px", fontWeight:"700" }}>發音正確！太棒了！</span>
+          <div style={{ display:"flex", flexDirection:"column", gap:"10px", flex:1 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+              <span style={{ fontSize:"26px" }}>✅</span>
+              <div>
+                <div style={{ color:"#52b788", fontSize:"15px", fontWeight:"700" }}>發音正確！</div>
+                {heard && <div style={{ fontSize:"11px", color:"#666", marginTop:"2px" }}>辨識到：「{heard}」</div>}
+              </div>
             </div>
-            {heard && <div style={{ fontSize:"11px", color:"#666", fontFamily:"monospace" }}>辨識到："{heard}"</div>}
-            <button onClick={reset} style={{ alignSelf:"flex-start", background:"none", border:`1px solid ${accent}44`, color:accent, borderRadius:"12px", padding:"4px 14px", fontSize:"12px", cursor:"pointer" }}>再練一次</button>
+            <button onClick={reset} style={{ alignSelf:"flex-start", background:"rgba(82,183,136,0.15)", border:"1px solid rgba(82,183,136,0.4)", color:"#52b788", borderRadius:"12px", padding:"6px 16px", fontSize:"13px", cursor:"pointer" }}>再練一次</button>
           </div>
         )}
+
         {status === "fail" && (
-          <div style={{ display:"flex", flexDirection:"column", gap:"8px", flex:1 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-              <span style={{ fontSize:"22px" }}>❌</span>
-              <span style={{ color:"#e94560", fontSize:"14px", fontWeight:"700" }}>再試試看！</span>
+          <div style={{ display:"flex", flexDirection:"column", gap:"10px", flex:1 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+              <span style={{ fontSize:"26px" }}>❌</span>
+              <div>
+                <div style={{ color:"#e94560", fontSize:"15px", fontWeight:"700" }}>發音不對，再試！</div>
+                <div style={{ fontSize:"11px", color:"#666", marginTop:"2px", lineHeight:"1.6" }}>
+                  {heard ? <>你說：「{heard}」<br/>目標：「{word}」</> : "沒清楚辨識到，靠近麥克風說清楚"}
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize:"11px", color:"#666", fontFamily:"monospace", lineHeight:"1.7" }}>
-              {heard ? <span>你說的："{heard}" → 目標："{word}"</span> : "沒清楚辨識到，說大聲清楚一點"}
-            </div>
-            <div style={{ display:"flex", gap:"8px" }}>
-              <button onClick={startListening} style={{ background:accent, border:"none", color:"#fff", borderRadius:"12px", padding:"6px 16px", fontSize:"12px", cursor:"pointer", fontWeight:"600" }}>🎤 再念一次</button>
-              <SpeakBtn text={word} label="再聽一次" accent={accent} rate={0.6} />
+            <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
+              <button onClick={startListening} style={{ background:accent, border:"none", color:"#fff", borderRadius:"12px", padding:"7px 18px", fontSize:"13px", cursor:"pointer", fontWeight:"700" }}>🎤 再念一次</button>
+              <SpeakBtn text={word} label="慢速聽" accent={accent} rate={0.5} />
             </div>
           </div>
         )}
+
         {status === "error" && (
           <div style={{ display:"flex", flexDirection:"column", gap:"8px", flex:1 }}>
-            <div style={{ fontSize:"12px", color:"#f5a623" }}>⚠️ {errorMsg}</div>
-            <button onClick={startListening} style={{ alignSelf:"flex-start", background:`${accent}22`, border:`1px solid ${accent}44`, color:accent, borderRadius:"12px", padding:"5px 14px", fontSize:"12px", cursor:"pointer" }}>🎤 重試</button>
+            <div style={{ fontSize:"13px", color:"#f5a623" }}>⚠️ {errorMsg}</div>
+            <button onClick={startListening} style={{ alignSelf:"flex-start", background:`${accent}22`, border:`1px solid ${accent}55`, color:accent, borderRadius:"12px", padding:"6px 16px", fontSize:"13px", cursor:"pointer" }}>🎤 重試</button>
           </div>
         )}
       </div>
@@ -292,10 +590,12 @@ function QuizMode({ words }) {
     const pool = [
       {word:"happy",chineseMeaning:"開心的"},{word:"tired",chineseMeaning:"累的"},
       {word:"go",chineseMeaning:"走"},{word:"eat",chineseMeaning:"吃"},
-      {word:"cold",chineseMeaning:"冷的"},{word:"money",chineseMeaning:"錢"},
-      {word:"now",chineseMeaning:"現在"},{word:"help",chineseMeaning:"幫忙"},
+      {word:"cold",chineseMeaning:"冷的"},{word:"help",chineseMeaning:"幫忙"},
+      {word:"now",chineseMeaning:"現在"},{word:"sorry",chineseMeaning:"抱歉"},
+      {word:"good",chineseMeaning:"好的"},{word:"want",chineseMeaning:"想要"},
+      {word:"late",chineseMeaning:"遲到的"},{word:"buy",chineseMeaning:"買"},
     ].filter(p => p.word !== correct.word);
-    const others = pool.sort(() => Math.random() - 0.5).slice(0, 2);
+    const others = pool.sort(() => Math.random() - 0.5).slice(0, 3);
     setOptions([...others, correct].sort(() => Math.random() - 0.5));
     setSelected(null);
   }
@@ -318,24 +618,24 @@ function QuizMode({ words }) {
 
   if (done) return (
     <div style={{ textAlign:"center", padding:"40px 20px" }}>
-      <div style={{ fontSize:"52px", marginBottom:"16px" }}>{score === words.length ? "🎉" : score >= 2 ? "👍" : "💪"}</div>
-      <div style={{ fontSize:"28px", fontWeight:"700", color:"#fff", marginBottom:"8px" }}>{score} / {words.length}</div>
-      <div style={{ fontSize:"14px", color:"#888", marginBottom:"28px" }}>{score === words.length ? "全對！太厲害了！" : score >= 2 ? "不錯！繼續加油！" : "再練一次！"}</div>
-      <button onClick={restart} style={{ background:CARD_COLORS[0].accent, border:"none", color:"#fff", borderRadius:"12px", padding:"13px 32px", fontSize:"15px", cursor:"pointer", fontWeight:"700" }}>再玩一次</button>
+      <div style={{ fontSize:"56px", marginBottom:"16px" }}>{score === words.length ? "🎉" : score >= 3 ? "👍" : "💪"}</div>
+      <div style={{ fontSize:"30px", fontWeight:"700", color:"#fff", marginBottom:"8px" }}>{score} / {words.length}</div>
+      <div style={{ fontSize:"14px", color:"#888", marginBottom:"28px" }}>{score === words.length ? "全對！太厲害了！" : score >= 3 ? "不錯！繼續加油！" : "再練一次！"}</div>
+      <button onClick={restart} style={{ background:CARD_COLORS[0].accent, border:"none", color:"#fff", borderRadius:"14px", padding:"14px 36px", fontSize:"16px", cursor:"pointer", fontWeight:"700" }}>再玩一次</button>
     </div>
   );
 
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"16px" }}>
-        <div style={{ fontSize:"12px", color:"#666", fontFamily:"monospace" }}>第 {qIndex+1} / {words.length} 題</div>
-        <div style={{ fontSize:"12px", color:"#52b788", fontFamily:"monospace" }}>✓ {score}</div>
+        <div style={{ fontSize:"13px", color:"#666" }}>第 {qIndex+1} / {words.length} 題</div>
+        <div style={{ fontSize:"13px", color:"#52b788" }}>✓ {score} 分</div>
       </div>
       <div style={{ background:c.light, borderRadius:"16px", padding:"28px", textAlign:"center", marginBottom:"16px" }}>
-        <div style={{ fontSize:"11px", color:c.accent, letterSpacing:"2px", textTransform:"uppercase", marginBottom:"10px", fontFamily:"monospace" }}>看中文，選英文</div>
-        <div style={{ fontSize:"32px", fontWeight:"700", color:"#fff" }}>{current.chineseMeaning}</div>
+        <div style={{ fontSize:"12px", color:c.accent, letterSpacing:"2px", textTransform:"uppercase", marginBottom:"10px" }}>看中文，選英文</div>
+        <div style={{ fontSize:"30px", fontWeight:"700", color:"#fff" }}>{current.chineseMeaning}</div>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"10px", marginBottom:"16px" }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"16px" }}>
         {options.map((opt, i) => {
           let bg = "rgba(255,255,255,0.06)", border = "1px solid rgba(255,255,255,0.1)", color = "#ccc";
           if (selected !== null) {
@@ -351,8 +651,8 @@ function QuizMode({ words }) {
       </div>
       {selected && (
         <>
-          <div style={{ padding:"12px", background:"rgba(255,255,255,0.04)", borderRadius:"10px", fontSize:"12px", color:"#888", fontStyle:"italic", textAlign:"center", marginBottom:"12px" }}>"{current.example}"</div>
-          <button onClick={next} style={{ width:"100%", background:c.accent, border:"none", color:"#fff", borderRadius:"10px", padding:"13px", fontSize:"14px", cursor:"pointer", fontWeight:"600" }}>
+          <div style={{ padding:"12px", background:"rgba(255,255,255,0.04)", borderRadius:"10px", fontSize:"12px", color:"#888", fontStyle:"italic", textAlign:"center", marginBottom:"12px" }}>"{current.example1}"</div>
+          <button onClick={next} style={{ width:"100%", background:c.accent, border:"none", color:"#fff", borderRadius:"12px", padding:"14px", fontSize:"15px", cursor:"pointer", fontWeight:"700" }}>
             {qIndex + 1 >= words.length ? "看成績 🎉" : "下一題 →"}
           </button>
         </>
@@ -374,83 +674,133 @@ function App() {
 
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0a0a0f 0%,#12121f 50%,#0a0a0f 100%)", fontFamily:"Georgia,serif", color:"#f0ede8" }}>
-      <style>{`
-        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
-        button{font-family:inherit}
-      `}</style>
       <div style={{ padding:"24px 20px 14px", textAlign:"center", borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
-        <div style={{ fontSize:"10px", letterSpacing:"4px", textTransform:"uppercase", color:"#888", marginBottom:"4px", fontFamily:"monospace" }}>Daily Vocabulary</div>
+        <div style={{ fontSize:"10px", letterSpacing:"4px", textTransform:"uppercase", color:"#888", marginBottom:"4px" }}>Daily Vocabulary</div>
         <h1 style={{ margin:"0 0 3px", fontSize:"24px", fontWeight:"300", letterSpacing:"2px" }}>每日英文單字</h1>
-        <div style={{ fontSize:"11px", color:"#555", fontFamily:"monospace", marginBottom:"3px" }}>{today}</div>
+        <div style={{ fontSize:"11px", color:"#555", marginBottom:"3px" }}>{today}</div>
         <div style={{ fontSize:"11px", color:"#666" }}>今日主題：<span style={{ color:"#f5a623" }}>{GROUP_LABELS[setIndex]}</span></div>
+        <div style={{ fontSize:"10px", color:"#444", marginTop:"2px" }}>75個單字 · 第{setIndex+1}/15組 · 每天5個</div>
         {learnedCount > 0 && mode === "learn" && (
-          <div style={{ marginTop:"8px", display:"inline-block", background:"rgba(82,183,136,0.15)", border:"1px solid rgba(82,183,136,0.3)", borderRadius:"20px", padding:"3px 14px", fontSize:"11px", color:"#52b788" }}>
+          <div style={{ marginTop:"8px", display:"inline-block", background:"rgba(82,183,136,0.15)", border:"1px solid rgba(82,183,136,0.3)", borderRadius:"20px", padding:"4px 16px", fontSize:"12px", color:"#52b788" }}>
             今日已學 {learnedCount} / {words.length} 個 🎉
           </div>
         )}
       </div>
+
       <div style={{ display:"flex", justifyContent:"center", gap:"10px", padding:"14px 20px 0" }}>
         {[["learn","📖 學習"],["quiz","🧠 測驗"]].map(([m, label]) => (
-          <button key={m} onClick={() => setMode(m)} style={{ padding:"8px 24px", borderRadius:"20px", border:"none", background: mode === m ? "#f5a623" : "rgba(255,255,255,0.08)", color: mode === m ? "#000" : "#999", fontSize:"13px", cursor:"pointer", fontWeight: mode === m ? "700":"400" }}>{label}</button>
+          <button key={m} onClick={() => setMode(m)} style={{
+            padding:"10px 28px", borderRadius:"20px", border:"none",
+            background: mode === m ? "#f5a623" : "rgba(255,255,255,0.08)",
+            color: mode === m ? "#000" : "#999",
+            fontSize:"14px", cursor:"pointer", fontWeight: mode === m ? "700":"400",
+            WebkitTapHighlightColor:"transparent"
+          }}>{label}</button>
         ))}
       </div>
-      <div style={{ maxWidth:"420px", margin:"0 auto", padding:"16px 14px" }}>
+
+      <div style={{ maxWidth:"460px", margin:"0 auto", padding:"16px 14px 40px" }}>
         {mode === "quiz" && <QuizMode words={words} />}
+
         {mode === "learn" && (
           <>
-            <div style={{ display:"flex", gap:"8px", marginBottom:"18px", justifyContent:"center" }}>
+            <div style={{ display:"flex", gap:"6px", marginBottom:"18px", overflowX:"auto", paddingBottom:"6px" }}>
               {words.map((w, i) => (
-                <button key={i} onClick={() => setActive(i)} style={{ padding:"8px 18px", borderRadius:"20px", border:"none", background: active === i ? CARD_COLORS[i].accent : "rgba(255,255,255,0.07)", color: active === i ? "#fff" : "#999", fontSize:"12px", cursor:"pointer", fontWeight: active === i ? "600":"400", position:"relative", flexShrink:0 }}>
-                  {learned[i] && <span style={{ position:"absolute", top:"-4px", right:"-2px", fontSize:"9px" }}>✓</span>}
+                <button key={i} onClick={() => setActive(i)} style={{
+                  flexShrink:0, padding:"8px 14px", borderRadius:"20px", border:"none",
+                  background: active === i ? CARD_COLORS[i % CARD_COLORS.length].accent : "rgba(255,255,255,0.07)",
+                  color: active === i ? "#fff" : "#999", fontSize:"12px", cursor:"pointer",
+                  fontWeight: active === i ? "700":"400", position:"relative",
+                  WebkitTapHighlightColor:"transparent"
+                }}>
+                  {learned[i] && <span style={{ position:"absolute", top:"-4px", right:"-2px", fontSize:"10px" }}>✓</span>}
                   {i+1}. {w.word}
                 </button>
               ))}
             </div>
+
             {words.map((word, i) => {
               if (active !== i) return null;
-              const c = CARD_COLORS[i];
+              const c = CARD_COLORS[i % CARD_COLORS.length];
               return (
-                <div key={i} style={{ background:c.bg, borderRadius:"20px", overflow:"hidden", boxShadow:"0 24px 60px rgba(0,0,0,0.5)", animation:"fadeIn 0.3s ease" }}>
-                  <div style={{ height:"3px", background:c.accent }} />
+                <div key={i} style={{ background:c.bg, borderRadius:"22px", overflow:"hidden", boxShadow:"0 24px 60px rgba(0,0,0,0.5)", animation:"fadeIn 0.3s ease" }}>
+                  <div style={{ height:"4px", background:c.accent }} />
+
+                  {/* Hero */}
                   <div style={{ padding:"28px 24px 20px", background:c.light, textAlign:"center" }}>
-                    <div style={{ fontSize:"10px", letterSpacing:"3px", color:c.accent, textTransform:"uppercase", marginBottom:"6px", fontFamily:"monospace" }}>{word.partOfSpeech}</div>
-                    <div style={{ fontSize:"34px", fontWeight:"700", color:"#fff", marginBottom:"6px" }}>{word.word}</div>
-                    <div style={{ fontSize:"13px", color:"rgba(255,255,255,0.4)", fontFamily:"monospace", marginBottom:"12px" }}>{word.pronunciation}</div>
-                    <div style={{ display:"inline-block", background:`${c.accent}22`, border:`1px solid ${c.accent}44`, borderRadius:"8px", padding:"7px 18px", fontSize:"16px", color:c.accent, fontWeight:"600" }}>{word.chineseMeaning}</div>
-                  </div>
-                  <div style={{ padding:"18px 22px 0" }}>
-                    <SpeechPractice word={word.word} accent={c.accent} />
-                    <div style={{ marginBottom:"12px", padding:"16px", background:"rgba(255,255,255,0.04)", borderRadius:"12px", borderLeft:`3px solid ${c.accent}` }}>
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"10px" }}>
-                        <div style={{ fontSize:"10px", letterSpacing:"2px", color:"#666", textTransform:"uppercase", fontFamily:"monospace" }}>例句</div>
-                        <SpeakBtn text={word.example} label="聽例句" accent={c.accent} rate={0.82} />
-                      </div>
-                      <div style={{ fontSize:"15px", color:"#e8e4de", lineHeight:"1.7", marginBottom:"10px", fontStyle:"italic" }}>"{word.example}"</div>
-                      {revealed[i]
-                        ? <div style={{ fontSize:"13px", color:"#888" }}>{word.exampleTranslation}</div>
-                        : <button onClick={() => setRevealed(r => ({...r,[i]:true}))} style={{ background:"none", border:"1px solid rgba(255,255,255,0.12)", color:"#888", borderRadius:"6px", padding:"5px 12px", fontSize:"12px", cursor:"pointer" }}>顯示翻譯</button>
-                      }
+                    <div style={{ fontSize:"11px", letterSpacing:"3px", color:c.accent, textTransform:"uppercase", marginBottom:"6px" }}>{word.partOfSpeech}</div>
+                    <div style={{ fontSize:"36px", fontWeight:"700", color:"#fff", marginBottom:"6px" }}>{word.word}</div>
+                    <div style={{ fontSize:"14px", color:"rgba(255,255,255,0.4)", marginBottom:"14px" }}>{word.pronunciation}</div>
+                    <div style={{ display:"inline-block", background:`${c.accent}22`, border:`1px solid ${c.accent}44`, borderRadius:"10px", padding:"8px 20px", fontSize:"17px", color:c.accent, fontWeight:"600" }}>
+                      {word.chineseMeaning}
                     </div>
+                  </div>
+
+                  <div style={{ padding:"18px 22px 0" }}>
+                    {/* 跟讀 */}
+                    <SpeechPractice word={word.word} accent={c.accent} />
+
+                    {/* 例句 */}
+                    <div style={{ marginBottom:"12px", padding:"16px", background:"rgba(255,255,255,0.04)", borderRadius:"14px", borderLeft:`3px solid ${c.accent}` }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px" }}>
+                        <div style={{ fontSize:"11px", letterSpacing:"2px", color:"#666", textTransform:"uppercase" }}>例句 × 2</div>
+                        <SpeakBtn text={word.example1} label="聽例句1" accent={c.accent} rate={0.82} />
+                      </div>
+
+                      {/* 例句1 */}
+                      <div style={{ marginBottom:"14px" }}>
+                        <div style={{ fontSize:"15px", color:"#e8e4de", lineHeight:"1.7", fontStyle:"italic", marginBottom:"6px" }}>
+                          "{ word.example1 }"
+                        </div>
+                        <div style={{ fontSize:"12px", color:"#777" }}>{word.example1Translation}</div>
+                      </div>
+
+                      {/* 例句2 */}
+                      <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)", paddingTop:"12px" }}>
+                        <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:"8px" }}>
+                          <SpeakBtn text={word.example2} label="聽例句2" accent={c.accent} rate={0.82} />
+                        </div>
+                        <div style={{ fontSize:"15px", color:"#e8e4de", lineHeight:"1.7", fontStyle:"italic", marginBottom:"6px" }}>
+                          "{ word.example2 }"
+                        </div>
+                        {revealed[i]
+                          ? <div style={{ fontSize:"12px", color:"#777" }}>{word.example2Translation}</div>
+                          : <button onClick={() => setRevealed(r => ({...r,[i]:true}))} style={{ background:"none", border:"1px solid rgba(255,255,255,0.12)", color:"#888", borderRadius:"8px", padding:"5px 14px", fontSize:"12px", cursor:"pointer" }}>顯示中文翻譯</button>
+                        }
+                      </div>
+                    </div>
+
+                    {/* 小技巧 */}
                     <div style={{ padding:"14px", background:`${c.accent}11`, borderRadius:"12px", border:`1px solid ${c.accent}22`, marginBottom:"14px" }}>
-                      <div style={{ fontSize:"10px", letterSpacing:"2px", color:c.accent, textTransform:"uppercase", marginBottom:"6px", fontFamily:"monospace" }}>💡 記憶小技巧</div>
+                      <div style={{ fontSize:"11px", letterSpacing:"2px", color:c.accent, textTransform:"uppercase", marginBottom:"6px" }}>💡 記憶小技巧</div>
                       <div style={{ fontSize:"13px", color:"rgba(255,255,255,0.65)", lineHeight:"1.6" }}>{word.tip}</div>
                     </div>
-                    <button onClick={() => setLearned(l => ({...l,[i]:!l[i]}))} style={{ width:"100%", padding:"12px", background: learned[i] ? `${c.accent}33` : "rgba(255,255,255,0.05)", border:`1px solid ${learned[i] ? c.accent : "rgba(255,255,255,0.1)"}`, color: learned[i] ? c.accent : "#666", borderRadius:"10px", fontSize:"13px", cursor:"pointer", fontWeight: learned[i] ? "700":"400", marginBottom:"4px" }}>
-                      {learned[i] ? "✓ 學會了！" : "標記為已學會"}
-                    </button>
+
+                    <button onClick={() => setLearned(l => ({...l,[i]:!l[i]}))} style={{
+                      width:"100%", padding:"13px",
+                      background: learned[i] ? `${c.accent}33` : "rgba(255,255,255,0.05)",
+                      border:`1px solid ${learned[i] ? c.accent : "rgba(255,255,255,0.1)"}`,
+                      color: learned[i] ? c.accent : "#666",
+                      borderRadius:"12px", fontSize:"14px", cursor:"pointer",
+                      fontWeight: learned[i] ? "700":"400", marginBottom:"4px",
+                      WebkitTapHighlightColor:"transparent"
+                    }}>{learned[i] ? "✓ 學會了！" : "標記為已學會"}</button>
                   </div>
-                  <div style={{ padding:"12px 22px 22px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <button onClick={() => setActive(Math.max(0,i-1))} disabled={i===0} style={{ background:"rgba(255,255,255,0.07)", border:"none", color:i===0?"#444":"#ccc", borderRadius:"8px", padding:"9px 18px", cursor:i===0?"default":"pointer", fontSize:"12px" }}>← 上一個</button>
-                    <div style={{ fontSize:"12px", color:"#555", fontFamily:"monospace" }}>{i+1} / {words.length}</div>
-                    <button onClick={() => setActive(Math.min(words.length-1,i+1))} disabled={i===words.length-1} style={{ background:i===words.length-1?"rgba(255,255,255,0.03)":c.accent, border:"none", color:i===words.length-1?"#444":"#fff", borderRadius:"8px", padding:"9px 18px", cursor:i===words.length-1?"default":"pointer", fontSize:"12px", fontWeight:"600" }}>下一個 →</button>
+
+                  {/* Nav */}
+                  <div style={{ padding:"14px 22px 24px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <button onClick={() => setActive(Math.max(0,i-1))} disabled={i===0} style={{ background:"rgba(255,255,255,0.07)", border:"none", color:i===0?"#444":"#ccc", borderRadius:"10px", padding:"10px 20px", cursor:i===0?"default":"pointer", fontSize:"13px", WebkitTapHighlightColor:"transparent" }}>← 上一個</button>
+                    <div style={{ fontSize:"12px", color:"#555" }}>{i+1} / {words.length}</div>
+                    <button onClick={() => setActive(Math.min(words.length-1,i+1))} disabled={i===words.length-1} style={{ background:i===words.length-1?"rgba(255,255,255,0.03)":c.accent, border:"none", color:i===words.length-1?"#444":"#fff", borderRadius:"10px", padding:"10px 20px", cursor:i===words.length-1?"default":"pointer", fontSize:"13px", fontWeight:"700", WebkitTapHighlightColor:"transparent" }}>下一個 →</button>
                   </div>
                 </div>
               );
             })}
           </>
         )}
-        <div style={{ textAlign:"center", marginTop:"14px", fontSize:"10px", color:"#333", fontFamily:"monospace" }}>每天自動換新單字組</div>
+        <div style={{ textAlign:"center", marginTop:"20px", fontSize:"11px", color:"#333" }}>
+          75個單字 · 15組主題 · 每天5個 · 自動換新
+        </div>
       </div>
     </div>
   );
