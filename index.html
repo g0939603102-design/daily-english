@@ -9,11 +9,12 @@
 body { background: #0a0a0f; font-family: Georgia, serif; color: #f0ede8; min-height: 100vh; }
 button { font-family: inherit; }
 @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+@keyframes fadeInLeft { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:translateX(0); } }
+@keyframes fadeInRight { from { opacity:0; transform:translateX(10px); } to { opacity:1; transform:translateX(0); } }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 @keyframes flame { 0%,100%{transform:scale(1) rotate(-3deg)} 50%{transform:scale(1.15) rotate(3deg)} }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pop { 0%{transform:scale(0.8);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
-@keyframes celebrate { 0%{transform:translateY(0) scale(1)} 50%{transform:translateY(-20px) scale(1.2)} 100%{transform:translateY(0) scale(1)} }
 @keyframes levelUp { 0%{transform:scale(0);opacity:0} 60%{transform:scale(1.2)} 100%{transform:scale(1);opacity:1} }
 </style>
 </head>
@@ -26,24 +27,32 @@ button { font-family: inherit; }
 const { useState, useRef, useEffect } = React;
 
 const TOPICS = [
-  { id: "daily", label: "日常生活", emoji: "🏠", desc: "吃飯、購物、交通、家居" },
-  { id: "travel", label: "旅遊出行", emoji: "✈️", desc: "機場、飯店、問路、景點" },
-  { id: "work", label: "職場英文", emoji: "💼", desc: "開會、email、簡報、同事" },
-  { id: "social", label: "社交聊天", emoji: "💬", desc: "朋友、約會、聚會、閒聊" },
-  { id: "drama", label: "追劇口語", emoji: "🎬", desc: "影集、電影常見片語" },
-  { id: "food", label: "飲食文化", emoji: "🍜", desc: "餐廳、點餐、食物描述" },
-  { id: "health", label: "健康生活", emoji: "💪", desc: "運動、飲食、身體狀況" },
-  { id: "shopping", label: "購物消費", emoji: "🛍️", desc: "砍價、比較、付款" },
+  { id: "daily",    label: "日常生活", emoji: "🏠", desc: "吃飯、購物、交通、家居",
+    color: { bg:"#0d1b2a", accent:"#4a9eda", light:"#112233" } },
+  { id: "travel",   label: "旅遊出行", emoji: "✈️", desc: "機場、飯店、問路、景點",
+    color: { bg:"#0d2018", accent:"#52b788", light:"#122a1e" } },
+  { id: "work",     label: "職場英文", emoji: "💼", desc: "開會、email、簡報、同事",
+    color: { bg:"#1a1030", accent:"#9b72cf", light:"#221540" } },
+  { id: "social",   label: "社交聊天", emoji: "💬", desc: "朋友、約會、聚會、閒聊",
+    color: { bg:"#2a1000", accent:"#ff7c3a", light:"#3a1800" } },
+  { id: "drama",    label: "追劇口語", emoji: "🎬", desc: "影集、電影常見片語",
+    color: { bg:"#200a14", accent:"#e94560", light:"#2e0f1e" } },
+  { id: "food",     label: "飲食文化", emoji: "🍜", desc: "餐廳、點餐、食物描述",
+    color: { bg:"#241500", accent:"#f5a623", light:"#321c00" } },
+  { id: "health",   label: "健康生活", emoji: "💪", desc: "運動、飲食、身體狀況",
+    color: { bg:"#0a2010", accent:"#40c070", light:"#0e2e16" } },
+  { id: "shopping", label: "購物消費", emoji: "🛍️", desc: "砍價、比較、付款",
+    color: { bg:"#280a20", accent:"#e06090", light:"#361230" } },
 ];
 
 const LEVELS = [
-  { id: "beginner", label: "初學者", emoji: "🌱", minWords: 0, desc: "超基礎日常單字" },
-  { id: "elementary", label: "初級", emoji: "🌿", minWords: 300, desc: "常用片語" },
-  { id: "intermediate", label: "中級", emoji: "🌳", minWords: 500, desc: "口語表達" },
-  { id: "advanced", label: "高級", emoji: "🏆", minWords: 1000, desc: "地道慣用語" },
+  { id: "beginner",     label: "初學者", emoji: "🌱", minWords: 0,    desc: "超基礎日常單字" },
+  { id: "elementary",   label: "初級",   emoji: "🌿", minWords: 300,  desc: "常用片語" },
+  { id: "intermediate", label: "中級",   emoji: "🌳", minWords: 500,  desc: "口語表達" },
+  { id: "advanced",     label: "高級",   emoji: "🏆", minWords: 1000, desc: "地道慣用語" },
 ];
 
-const STORAGE_KEY = "daily_english_v3";
+const STORAGE_KEY = "daily_english_v4";
 
 function loadData() {
   try { const r = localStorage.getItem(STORAGE_KEY); if (r) return JSON.parse(r); } catch(e) {}
@@ -53,12 +62,14 @@ function saveData(d) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch(e) {}
 }
 function getToday() { return new Date().toISOString().slice(0, 10); }
-
 function getCurrentLevel(totalWords) {
   return LEVELS.slice().reverse().find(l => totalWords >= l.minWords) || LEVELS[0];
 }
 function getNextLevel(totalWords) {
   return LEVELS.find(l => l.minWords > totalWords) || null;
+}
+function getTopicColor(topicId) {
+  return TOPICS.find(t => t.id === topicId)?.color || TOPICS[0].color;
 }
 
 async function fetchWords(topic, level, count = 8) {
@@ -173,6 +184,7 @@ function SpeechPractice({ word, accent, onPass }) {
                 {heard && <div style={{ fontSize:"11px", color:"#555", marginTop:"2px" }}>辨識：「{heard}」</div>}
               </div>
             </div>
+            <button onClick={reset} style={{ alignSelf:"flex-start", background:"rgba(82,183,136,0.12)", border:"1px solid rgba(82,183,136,0.35)", color:"#52b788", borderRadius:"10px", padding:"5px 14px", fontSize:"12px", cursor:"pointer" }}>再練一次</button>
           </div>
         )}
         {status === "fail" && (
@@ -203,51 +215,41 @@ function SpeechPractice({ word, accent, onPass }) {
   );
 }
 
-const CARD_COLORS = [
-  { bg: "#1a1a2e", accent: "#e94560", light: "#16213e" },
-  { bg: "#0f3460", accent: "#f5a623", light: "#1a4a7a" },
-  { bg: "#1b4332", accent: "#52b788", light: "#2d6a4f" },
-  { bg: "#3d0c02", accent: "#ff6b35", light: "#5c1a10" },
-  { bg: "#240046", accent: "#c77dff", light: "#3c096c" },
-];
-
 function SetupScreen({ onComplete }) {
-  const [step, setStep] = useState(1);
   const [topic, setTopic] = useState(null);
-
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0a0a0f,#12121f)", padding:"32px 20px", maxWidth:"440px", margin:"0 auto" }}>
       <div style={{ textAlign:"center", marginBottom:"28px" }}>
-        <div style={{ fontSize:"36px", marginBottom:"12px" }}>📚</div>
-        <h1 style={{ fontSize:"22px", fontWeight:"300", letterSpacing:"2px", marginBottom:"6px" }}>歡迎使用每日英文</h1>
-        <p style={{ fontSize:"13px", color:"#666" }}>選擇你的學習主題，AI 每次幫你生成新單字</p>
+        <div style={{ fontSize:"40px", marginBottom:"12px" }}>📚</div>
+        <h1 style={{ fontSize:"22px", fontWeight:"300", letterSpacing:"2px", marginBottom:"8px" }}>歡迎使用每日英文</h1>
+        <p style={{ fontSize:"13px", color:"#555" }}>選擇主題，AI 幫你無限生成單字</p>
       </div>
-      <div style={{ fontSize:"14px", color:"#f5a623", marginBottom:"16px", textAlign:"center" }}>選擇學習主題</div>
+      <div style={{ fontSize:"13px", color:"#888", marginBottom:"14px", textAlign:"center" }}>選擇你的學習主題</div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px", marginBottom:"24px" }}>
         {TOPICS.map(t => (
-          <button key={t.id} onClick={() => setTopic(t.id)} style={{ padding:"16px 12px", borderRadius:"14px", border:`2px solid ${topic === t.id ? "#f5a623" : "rgba(255,255,255,0.08)"}`, background: topic === t.id ? "rgba(245,166,35,0.12)" : "rgba(255,255,255,0.04)", color: topic === t.id ? "#f5a623" : "#ccc", cursor:"pointer", textAlign:"left" }}>
-            <div style={{ fontSize:"22px", marginBottom:"6px" }}>{t.emoji}</div>
+          <button key={t.id} onClick={() => setTopic(t.id)} style={{ padding:"16px 12px", borderRadius:"14px", border:`2px solid ${topic === t.id ? t.color.accent : "rgba(255,255,255,0.08)"}`, background: topic === t.id ? `${t.color.accent}18` : "rgba(255,255,255,0.04)", color: topic === t.id ? t.color.accent : "#ccc", cursor:"pointer", textAlign:"left", transition:"all 0.2s" }}>
+            <div style={{ fontSize:"24px", marginBottom:"6px" }}>{t.emoji}</div>
             <div style={{ fontSize:"13px", fontWeight:"600", marginBottom:"3px" }}>{t.label}</div>
-            <div style={{ fontSize:"11px", color:"#666" }}>{t.desc}</div>
+            <div style={{ fontSize:"11px", color:"#555" }}>{t.desc}</div>
           </button>
         ))}
       </div>
-      <button onClick={() => topic && onComplete(topic)} style={{ width:"100%", padding:"14px", background: topic ? "#f5a623" : "rgba(255,255,255,0.06)", border:"none", color: topic ? "#000" : "#555", borderRadius:"12px", fontSize:"15px", cursor: topic ? "pointer":"default", fontWeight:"700" }}>
+      <button onClick={() => topic && onComplete(topic)} style={{ width:"100%", padding:"14px", background: topic ? TOPICS.find(t=>t.id===topic)?.color.accent : "rgba(255,255,255,0.06)", border:"none", color: topic ? "#fff" : "#444", borderRadius:"14px", fontSize:"15px", cursor: topic ? "pointer":"default", fontWeight:"700", transition:"all 0.2s" }}>
         開始學習 🚀
       </button>
     </div>
   );
 }
 
-function LevelUpModal({ level, onClose }) {
+function LevelUpModal({ level, accent, onClose }) {
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:200, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"20px" }}>
-      <div style={{ animation:"levelUp 0.5s ease", textAlign:"center" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:200, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"20px" }}>
+      <div style={{ animation:"levelUp 0.5s ease", textAlign:"center", padding:"20px" }}>
         <div style={{ fontSize:"80px", marginBottom:"16px" }}>{level.emoji}</div>
-        <div style={{ fontSize:"14px", letterSpacing:"4px", textTransform:"uppercase", color:"#f5a623", marginBottom:"8px" }}>Level Up!</div>
-        <div style={{ fontSize:"32px", fontWeight:"700", color:"#fff", marginBottom:"8px" }}>{level.label}</div>
-        <div style={{ fontSize:"15px", color:"#888", marginBottom:"28px" }}>{level.desc}</div>
-        <button onClick={onClose} style={{ background:"#f5a623", border:"none", color:"#000", borderRadius:"14px", padding:"14px 36px", fontSize:"16px", cursor:"pointer", fontWeight:"700" }}>繼續練習！</button>
+        <div style={{ fontSize:"13px", letterSpacing:"4px", textTransform:"uppercase", color:accent, marginBottom:"8px" }}>Level Up!</div>
+        <div style={{ fontSize:"30px", fontWeight:"700", color:"#fff", marginBottom:"8px" }}>{level.label}</div>
+        <div style={{ fontSize:"14px", color:"#777", marginBottom:"28px" }}>{level.desc} の單字解鎖</div>
+        <button onClick={onClose} style={{ background:accent, border:"none", color:"#fff", borderRadius:"14px", padding:"14px 36px", fontSize:"16px", cursor:"pointer", fontWeight:"700" }}>繼續練習！</button>
       </div>
     </div>
   );
@@ -256,16 +258,18 @@ function LevelUpModal({ level, onClose }) {
 function App() {
   const [appData, setAppData] = useState(null);
   const [screen, setScreen] = useState("init");
+  const [history, setHistory] = useState([]); // 已看過的單字
   const [wordQueue, setWordQueue] = useState([]);
+  const [currentIdx, setCurrentIdx] = useState(-1); // 在 history 中的位置，-1 = 最新
   const [currentWord, setCurrentWord] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [revealed, setRevealed] = useState(false);
   const [speechPassed, setSpeechPassed] = useState(false);
-  const [todayCount, setTodayCount] = useState(0);
   const [showStreak, setShowStreak] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(null);
-  const [colorIdx, setColorIdx] = useState(0);
+
+  const isInHistory = currentIdx >= 0;
 
   useEffect(() => {
     const data = loadData();
@@ -273,7 +277,6 @@ function App() {
       setScreen("setup");
     } else {
       setAppData(data);
-      // 打卡
       const today = getToday();
       if (data.lastCheckin !== today) {
         const yesterday = new Date();
@@ -288,26 +291,22 @@ function App() {
           setTimeout(() => setShowStreak(false), 2500);
         }
       }
-      const todayKey = `today_${today}`;
-      setTodayCount(data[todayKey] || 0);
       setScreen("main");
       loadMoreWords(data);
     }
   }, []);
 
   async function loadMoreWords(data) {
+    if (loading) return;
     setLoading(true); setLoadError(null);
     try {
       const level = getCurrentLevel(data.totalWords || 0);
       const words = await fetchWords(data.topic, level.id, 8);
       setWordQueue(prev => {
-        const queue = [...prev, ...words];
-        if (!currentWord && queue.length > 0) {
-          setCurrentWord(queue[0]);
-          return queue.slice(1);
-        }
-        return queue;
+        const newQueue = [...prev, ...words];
+        return newQueue;
       });
+      // 如果目前沒有當前單字，顯示第一個
       if (!currentWord && words.length > 0) {
         setCurrentWord(words[0]);
         setWordQueue(words.slice(1));
@@ -320,6 +319,24 @@ function App() {
   }
 
   function handleNext() {
+    if (isInHistory) {
+      // 在歷史紀錄中往前翻
+      const nextIdx = currentIdx + 1;
+      if (nextIdx >= history.length) {
+        // 回到最新
+        setCurrentIdx(-1);
+        setRevealed(false);
+        setSpeechPassed(false);
+      } else {
+        setCurrentIdx(nextIdx);
+        setCurrentWord(history[nextIdx]);
+        setRevealed(false);
+        setSpeechPassed(false);
+      }
+      return;
+    }
+
+    // 正常模式：記錄當前單字到歷史，前進到下一個
     const data = appData;
     const today = getToday();
     const todayKey = `today_${today}`;
@@ -334,16 +351,16 @@ function App() {
     const updated = { ...data, totalWords: newTotal, [todayKey]: newTodayCount };
     setAppData(updated);
     saveData(updated);
-    setTodayCount(newTodayCount);
 
-    if (leveledUp) {
-      setShowLevelUp(newLevel);
+    if (leveledUp) setShowLevelUp(newLevel);
+
+    // 把當前單字加到歷史
+    if (currentWord) {
+      setHistory(prev => [...prev, currentWord]);
     }
 
-    // 下一個單字
     setRevealed(false);
     setSpeechPassed(false);
-    setColorIdx(i => (i + 1) % CARD_COLORS.length);
 
     if (wordQueue.length > 0) {
       setCurrentWord(wordQueue[0]);
@@ -353,10 +370,26 @@ function App() {
       loadMoreWords(updated);
     }
 
-    // 如果 queue 快空了，預先載入
-    if (wordQueue.length <= 2) {
+    if (wordQueue.length <= 3) {
       loadMoreWords(updated);
     }
+  }
+
+  function handlePrev() {
+    if (history.length === 0) return;
+    if (isInHistory && currentIdx > 0) {
+      // 往回翻歷史
+      const prevIdx = currentIdx - 1;
+      setCurrentIdx(prevIdx);
+      setCurrentWord(history[prevIdx]);
+    } else if (!isInHistory) {
+      // 從最新回到最後一個歷史
+      const lastIdx = history.length - 1;
+      setCurrentIdx(lastIdx);
+      setCurrentWord(history[lastIdx]);
+    }
+    setRevealed(false);
+    setSpeechPassed(false);
   }
 
   function handleSetup(topic) {
@@ -370,90 +403,90 @@ function App() {
   if (screen === "setup") return <SetupScreen onComplete={handleSetup} />;
 
   const data = appData;
+  const c = getTopicColor(data?.topic);
   const currentLevel = getCurrentLevel(data?.totalWords || 0);
   const nextLevel = getNextLevel(data?.totalWords || 0);
   const topicInfo = TOPICS.find(t => t.id === data?.topic);
-  const c = CARD_COLORS[colorIdx];
   const today = new Date().toLocaleDateString("zh-TW", { month:"long", day:"numeric", weekday:"long" });
-
-  // 升級到下一級還需要多少個
+  const todayKey = `today_${getToday()}`;
+  const todayCount = data?.[todayKey] || 0;
   const wordsToNext = nextLevel ? nextLevel.minWords - (data?.totalWords || 0) : null;
+  const canGoPrev = history.length > 0 && !(isInHistory && currentIdx === 0);
+
+  const displayWord = isInHistory ? history[currentIdx] : currentWord;
+  const historyLabel = isInHistory ? `回顧第 ${currentIdx + 1} / ${history.length} 個` : null;
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0a0a0f 0%,#12121f 50%,#0a0a0f 100%)" }}>
+    <div style={{ minHeight:"100vh", background:`linear-gradient(160deg, ${c.bg} 0%, #0a0a0f 60%)` }}>
       <style>{`
         @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes fadeInLeft{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes fadeInRight{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
         @keyframes flame{0%,100%{transform:scale(1) rotate(-3deg)}50%{transform:scale(1.15) rotate(3deg)}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes pop{0%{transform:scale(0.8);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
-        @keyframes celebrate{0%{transform:translateY(0) scale(1)}50%{transform:translateY(-20px) scale(1.2)}100%{transform:translateY(0) scale(1)}}
         @keyframes levelUp{0%{transform:scale(0);opacity:0}60%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
       `}</style>
 
-      {showLevelUp && <LevelUpModal level={showLevelUp} onClose={() => setShowLevelUp(null)} />}
+      {showLevelUp && <LevelUpModal level={showLevelUp} accent={c.accent} onClose={() => setShowLevelUp(null)} />}
 
       {showStreak && (
-        <div style={{ position:"fixed", top:"20px", left:"50%", transform:"translateX(-50%)", zIndex:100, background:"rgba(255,107,0,0.95)", borderRadius:"20px", padding:"10px 24px", display:"flex", alignItems:"center", gap:"8px", animation:"pop 0.3s ease" }}>
+        <div style={{ position:"fixed", top:"20px", left:"50%", transform:"translateX(-50%)", zIndex:100, background:`${c.accent}ee`, borderRadius:"20px", padding:"10px 24px", display:"flex", alignItems:"center", gap:"8px", animation:"pop 0.3s ease", whiteSpace:"nowrap" }}>
           <span style={{ fontSize:"20px", animation:"flame 1s infinite" }}>🔥</span>
-          <span style={{ fontSize:"15px", fontWeight:"700", color:"#fff" }}>連續 {data?.streak} 天！</span>
+          <span style={{ fontSize:"15px", fontWeight:"700", color:"#fff" }}>連續 {data?.streak} 天打卡！</span>
         </div>
       )}
 
       {/* Header */}
-      <div style={{ padding:"16px 20px 12px", borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
+      <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${c.accent}22` }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"10px" }}>
           <div>
-            <div style={{ fontSize:"10px", letterSpacing:"3px", textTransform:"uppercase", color:"#555", marginBottom:"2px" }}>English Practice</div>
-            <div style={{ fontSize:"12px", color:"#777" }}>{today}</div>
+            <div style={{ fontSize:"11px", letterSpacing:"3px", textTransform:"uppercase", color:`${c.accent}99`, marginBottom:"2px" }}>English Practice</div>
+            <div style={{ fontSize:"12px", color:"#666" }}>{today}</div>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-            {/* Streak */}
-            <div style={{ display:"inline-flex", alignItems:"center", gap:"4px", background:"rgba(255,107,0,0.12)", border:"1px solid rgba(255,107,0,0.25)", borderRadius:"16px", padding:"4px 12px" }}>
-              <span style={{ fontSize:"16px", animation: (data?.streak||0) > 0 ? "flame 1.5s infinite" : "none" }}>🔥</span>
-              <span style={{ fontSize:"14px", fontWeight:"700", color:"#ff6b35" }}>{data?.streak || 0}</span>
-            </div>
+          <div style={{ display:"inline-flex", alignItems:"center", gap:"5px", background:`${c.accent}18`, border:`1px solid ${c.accent}35`, borderRadius:"16px", padding:"5px 14px" }}>
+            <span style={{ fontSize:"16px", animation: (data?.streak||0) > 0 ? "flame 1.5s infinite" : "none" }}>🔥</span>
+            <span style={{ fontSize:"15px", fontWeight:"700", color:c.accent }}>{data?.streak || 0}</span>
+            <span style={{ fontSize:"11px", color:"#666" }}>天</span>
           </div>
         </div>
 
-        {/* 等級 + 進度 */}
-        <div style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom:"10px" }}>
-          <div style={{ background:"rgba(255,255,255,0.06)", borderRadius:"16px", padding:"4px 12px", fontSize:"12px", color:"#ccc" }}>
-            {currentLevel.emoji} {currentLevel.label}
-          </div>
-          <div style={{ background:"rgba(255,255,255,0.06)", borderRadius:"16px", padding:"4px 12px", fontSize:"12px", color:"#ccc" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap", marginBottom:"10px" }}>
+          <div style={{ background:`${c.accent}18`, border:`1px solid ${c.accent}35`, borderRadius:"16px", padding:"4px 12px", fontSize:"12px", color:c.accent }}>
             {topicInfo?.emoji} {topicInfo?.label}
           </div>
+          <div style={{ background:"rgba(255,255,255,0.06)", borderRadius:"16px", padding:"4px 12px", fontSize:"12px", color:"#999" }}>
+            {currentLevel.emoji} {currentLevel.label}
+          </div>
         </div>
 
-        {/* 統計 */}
-        <div style={{ display:"flex", gap:"16px" }}>
-          <div style={{ fontSize:"12px", color:"#666" }}>
-            今日 <span style={{ color:"#f5a623", fontWeight:"700" }}>{todayCount}</span> 個
-          </div>
-          <div style={{ fontSize:"12px", color:"#666" }}>
-            累積 <span style={{ color:"#c77dff", fontWeight:"700" }}>{data?.totalWords || 0}</span> 個
-          </div>
-          {nextLevel && (
-            <div style={{ fontSize:"12px", color:"#666" }}>
-              升級還差 <span style={{ color:"#52b788", fontWeight:"700" }}>{wordsToNext}</span> 個
-            </div>
-          )}
+        <div style={{ display:"flex", gap:"16px", flexWrap:"wrap" }}>
+          <div style={{ fontSize:"12px", color:"#666" }}>今日 <span style={{ color:c.accent, fontWeight:"700" }}>{todayCount}</span> 個</div>
+          <div style={{ fontSize:"12px", color:"#666" }}>累積 <span style={{ color:"#c77dff", fontWeight:"700" }}>{data?.totalWords || 0}</span> 個</div>
+          {nextLevel && <div style={{ fontSize:"12px", color:"#666" }}>升級還差 <span style={{ color:"#52b788", fontWeight:"700" }}>{wordsToNext}</span> 個</div>}
         </div>
       </div>
 
       <div style={{ maxWidth:"460px", margin:"0 auto", padding:"16px 14px 48px" }}>
 
+        {/* 回顧提示 */}
+        {historyLabel && (
+          <div style={{ textAlign:"center", marginBottom:"12px", padding:"6px", background:`${c.accent}18`, borderRadius:"10px", fontSize:"12px", color:c.accent }}>
+            📖 {historyLabel}
+          </div>
+        )}
+
         {/* 載入中 */}
-        {!currentWord && loading && (
+        {!displayWord && loading && (
           <div style={{ textAlign:"center", padding:"60px 20px" }}>
-            <div style={{ width:"40px", height:"40px", border:"3px solid rgba(255,255,255,0.1)", borderTop:"3px solid #f5a623", borderRadius:"50%", animation:"spin 1s linear infinite", margin:"0 auto 16px" }} />
-            <div style={{ fontSize:"14px", color:"#666" }}>AI 正在準備新單字...</div>
+            <div style={{ width:"40px", height:"40px", border:`3px solid ${c.accent}33`, borderTop:`3px solid ${c.accent}`, borderRadius:"50%", animation:"spin 1s linear infinite", margin:"0 auto 16px" }} />
+            <div style={{ fontSize:"14px", color:"#555" }}>AI 正在準備新單字...</div>
           </div>
         )}
 
         {/* 錯誤 */}
-        {loadError && !currentWord && (
+        {loadError && !displayWord && (
           <div style={{ textAlign:"center", padding:"40px 20px" }}>
             <div style={{ fontSize:"48px", marginBottom:"12px" }}>😵</div>
             <div style={{ fontSize:"14px", color:"#e94560", marginBottom:"20px" }}>{loadError}</div>
@@ -462,41 +495,41 @@ function App() {
         )}
 
         {/* 單字卡 */}
-        {currentWord && (
-          <div key={currentWord.word} style={{ background:c.bg, borderRadius:"22px", overflow:"hidden", boxShadow:"0 24px 60px rgba(0,0,0,0.5)", animation:"fadeIn 0.3s ease" }}>
+        {displayWord && (
+          <div key={`${displayWord.word}-${currentIdx}`} style={{ background:c.bg, borderRadius:"22px", overflow:"hidden", boxShadow:`0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px ${c.accent}22`, animation: isInHistory ? "fadeInLeft 0.25s ease" : "fadeInRight 0.25s ease" }}>
             <div style={{ height:"4px", background:c.accent }} />
 
             {/* Hero */}
             <div style={{ padding:"28px 24px 20px", background:c.light, textAlign:"center" }}>
-              <div style={{ fontSize:"11px", letterSpacing:"3px", color:c.accent, textTransform:"uppercase", marginBottom:"6px" }}>{currentWord.partOfSpeech}</div>
-              <div style={{ fontSize:"38px", fontWeight:"700", color:"#fff", marginBottom:"8px" }}>{currentWord.word}</div>
-              <div style={{ fontSize:"14px", color:"rgba(255,255,255,0.4)", marginBottom:"14px" }}>{currentWord.pronunciation}</div>
+              <div style={{ fontSize:"11px", letterSpacing:"3px", color:c.accent, textTransform:"uppercase", marginBottom:"6px" }}>{displayWord.partOfSpeech}</div>
+              <div style={{ fontSize:"38px", fontWeight:"700", color:"#fff", marginBottom:"8px" }}>{displayWord.word}</div>
+              <div style={{ fontSize:"14px", color:"rgba(255,255,255,0.4)", marginBottom:"14px" }}>{displayWord.pronunciation}</div>
               <div style={{ display:"inline-block", background:`${c.accent}22`, border:`1px solid ${c.accent}44`, borderRadius:"10px", padding:"8px 20px", fontSize:"17px", color:c.accent, fontWeight:"600" }}>
-                {currentWord.chineseMeaning}
+                {displayWord.chineseMeaning}
               </div>
             </div>
 
             <div style={{ padding:"18px 22px 0" }}>
               {/* 跟讀 */}
-              <SpeechPractice word={currentWord.word} accent={c.accent} onPass={() => setSpeechPassed(true)} />
+              <SpeechPractice word={displayWord.word} accent={c.accent} onPass={() => setSpeechPassed(true)} />
 
               {/* 例句 */}
               <div style={{ marginBottom:"12px", padding:"16px", background:"rgba(255,255,255,0.04)", borderRadius:"14px", borderLeft:`3px solid ${c.accent}` }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"12px" }}>
                   <div style={{ fontSize:"11px", letterSpacing:"2px", color:"#555", textTransform:"uppercase" }}>例句 × 2</div>
-                  <SpeakBtn text={currentWord.example1} label="聽例句1" accent={c.accent} rate={0.82} />
+                  <SpeakBtn text={displayWord.example1} label="聽例句1" accent={c.accent} rate={0.82} />
                 </div>
                 <div style={{ marginBottom:"12px" }}>
-                  <div style={{ fontSize:"14px", color:"#e8e4de", lineHeight:"1.7", fontStyle:"italic", marginBottom:"5px" }}>"{currentWord.example1}"</div>
-                  <div style={{ fontSize:"12px", color:"#666" }}>{currentWord.example1Translation}</div>
+                  <div style={{ fontSize:"14px", color:"#e8e4de", lineHeight:"1.7", fontStyle:"italic", marginBottom:"5px" }}>"{displayWord.example1}"</div>
+                  <div style={{ fontSize:"12px", color:"#666" }}>{displayWord.example1Translation}</div>
                 </div>
                 <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)", paddingTop:"12px" }}>
                   <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:"8px" }}>
-                    <SpeakBtn text={currentWord.example2} label="聽例句2" accent={c.accent} rate={0.82} />
+                    <SpeakBtn text={displayWord.example2} label="聽例句2" accent={c.accent} rate={0.82} />
                   </div>
-                  <div style={{ fontSize:"14px", color:"#e8e4de", lineHeight:"1.7", fontStyle:"italic", marginBottom:"5px" }}>"{currentWord.example2}"</div>
+                  <div style={{ fontSize:"14px", color:"#e8e4de", lineHeight:"1.7", fontStyle:"italic", marginBottom:"5px" }}>"{displayWord.example2}"</div>
                   {revealed
-                    ? <div style={{ fontSize:"12px", color:"#666" }}>{currentWord.example2Translation}</div>
+                    ? <div style={{ fontSize:"12px", color:"#666" }}>{displayWord.example2Translation}</div>
                     : <button onClick={() => setRevealed(true)} style={{ background:"none", border:"1px solid rgba(255,255,255,0.1)", color:"#777", borderRadius:"8px", padding:"5px 14px", fontSize:"12px", cursor:"pointer" }}>顯示中文翻譯</button>
                   }
                 </div>
@@ -505,25 +538,33 @@ function App() {
               {/* 小技巧 */}
               <div style={{ padding:"14px", background:`${c.accent}11`, borderRadius:"12px", border:`1px solid ${c.accent}22`, marginBottom:"16px" }}>
                 <div style={{ fontSize:"11px", letterSpacing:"2px", color:c.accent, textTransform:"uppercase", marginBottom:"6px" }}>💡 記憶小技巧</div>
-                <div style={{ fontSize:"13px", color:"rgba(255,255,255,0.65)", lineHeight:"1.6" }}>{currentWord.tip}</div>
+                <div style={{ fontSize:"13px", color:"rgba(255,255,255,0.65)", lineHeight:"1.6" }}>{displayWord.tip}</div>
               </div>
 
-              {/* 下一個按鈕 */}
-              <button onClick={handleNext} style={{ width:"100%", padding:"15px", background: c.accent, border:"none", color:"#fff", borderRadius:"14px", fontSize:"16px", cursor:"pointer", fontWeight:"700", marginBottom:"4px", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px" }}>
-                {speechPassed ? "✅ 發音通過！下一個 →" : "學會了，下一個 →"}
-              </button>
-              <div style={{ textAlign:"center", fontSize:"11px", color:"#444", padding:"6px" }}>
-                看完就算學會，也可以先通過發音再繼續
+              {/* 導航按鈕 */}
+              <div style={{ display:"flex", gap:"10px", marginBottom:"8px" }}>
+                <button
+                  onClick={handlePrev}
+                  disabled={!canGoPrev}
+                  style={{ flex:1, padding:"13px", background: canGoPrev ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)", border:`1px solid ${canGoPrev ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)"}`, color: canGoPrev ? "#ccc" : "#444", borderRadius:"14px", fontSize:"14px", cursor: canGoPrev ? "pointer":"default", fontWeight:"600" }}>
+                  ← 上一個
+                </button>
+                <button
+                  onClick={handleNext}
+                  style={{ flex:2, padding:"13px", background: c.accent, border:"none", color:"#fff", borderRadius:"14px", fontSize:"14px", cursor:"pointer", fontWeight:"700", display:"flex", alignItems:"center", justifyContent:"center", gap:"6px" }}>
+                  {speechPassed ? "✅ 已通過發音！" : isInHistory ? "下一個 →" : "學會了，下一個 →"}
+                </button>
+              </div>
+              <div style={{ textAlign:"center", fontSize:"11px", color:"#444", paddingBottom:"16px" }}>
+                看完就算學會 · 也可以先通過發音再繼續
               </div>
             </div>
-
-            <div style={{ height:"20px" }} />
           </div>
         )}
 
         {/* 底部設定 */}
         <div style={{ textAlign:"center", marginTop:"24px" }}>
-          <button onClick={() => { if(confirm("重新設定主題？")) { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }}} style={{ background:"none", border:"1px solid rgba(255,255,255,0.1)", color:"#555", borderRadius:"20px", padding:"7px 18px", fontSize:"12px", cursor:"pointer" }}>
+          <button onClick={() => { if(confirm("重新設定主題？紀錄會保留。")) { const d = {...appData}; delete d.topic; saveData(d); setScreen("setup"); setHistory([]); setWordQueue([]); setCurrentWord(null); setCurrentIdx(-1); }}} style={{ background:"none", border:`1px solid ${c.accent}33`, color:`${c.accent}88`, borderRadius:"20px", padding:"7px 18px", fontSize:"12px", cursor:"pointer" }}>
             ⚙️ 更改主題
           </button>
         </div>
