@@ -6,7 +6,8 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
   try {
-    const { topic, level, count = 8 } = req.body;
+    const { topic, level, count = 8, seenWords = [] } = req.body;
+
     const topicMap = {
       daily:"日常生活", travel:"旅遊出行", work:"職場英文",
       social:"社交聊天", drama:"追劇口語", food:"飲食文化",
@@ -18,6 +19,10 @@ export default async function handler(req, res) {
       intermediate:"中級（口語表達，較複雜句型）",
       advanced:"高級（地道用法，慣用語）"
     };
+
+    const avoidList = seenWords.length > 0
+      ? `\n請避免出現以下已學過的單字：${seenWords.join("、")}`
+      : "";
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -34,9 +39,9 @@ export default async function handler(req, res) {
           content: `你是英文老師，幫助台灣人學生活英文。
 主題：${topicMap[topic] || topic}
 程度：${levelMap[level] || level}
-時間戳：${Date.now()}
+時間戳：${Date.now()}${avoidList}
 
-生成${count}個不同的實用英文單字或片語（每次必須不同）。只回傳JSON：
+生成${count}個【全新且不重複】的實用英文單字或片語。每次必須選不同的單字。只回傳JSON，不要其他文字：
 {"words":[{"word":"","pronunciation":"","partOfSpeech":"","chineseMeaning":"","example1":"","example1Translation":"","example2":"","example2Translation":"","tip":""}]}`
         }]
       })
