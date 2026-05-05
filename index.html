@@ -30,7 +30,7 @@ const { useState, useRef, useEffect, useCallback } = React;
 // ── Supabase ──
 const SUPABASE_URL = "https://urayzkbkzrdrvsdrsmiu.supabase.co";
 const SUPABASE_KEY = "sb_publishable_wzs-IyQONvOXTpwKq46kPw_x6Kww_4r";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 function getUserId() {
   let id = localStorage.getItem("daily_english_uid");
