@@ -274,13 +274,29 @@ function SpeechPractice({word,accent,onPass}) {
   );
 }
 
-// ── 複習模式 ──
+// ── 複習模式（聽音辨義版）──
 function ReviewScreen({reviews, accent, onDone}) {
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState(null);
   const [correct, setCorrect] = useState(0);
   const [done, setDone] = useState(false);
-  const [showAnswer, setShowAnswer] = useState(false);
+
+  useEffect(() => {
+    if (!reviews || reviews.length === 0) return;
+    const timer = setTimeout(() => playWord(reviews[idx]?.content), 500);
+    return () => clearTimeout(timer);
+  }, [idx, reviews]);
+
+  function playWord(word) {
+    if (!word || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(word);
+    u.lang = "en-US"; u.rate = 0.75;
+    const voices = window.speechSynthesis.getVoices();
+    const v = voices.find(v=>v.lang==="en-US")||voices.find(v=>v.lang.startsWith("en"));
+    if(v) u.voice=v;
+    window.speechSynthesis.speak(u);
+  }
 
   if (!reviews || reviews.length === 0) {
     return (
@@ -306,24 +322,25 @@ function ReviewScreen({reviews, accent, onDone}) {
   }
 
   const current = reviews[idx];
-  // 產生選項
-  const allReviews = reviews.filter((_,i)=>i!==idx);
-  const pool = allReviews.sort(()=>Math.random()-0.5).slice(0,2);
-  while(pool.length < 2) pool.push({content:"...",translation:"..."});
-  const options = [...pool.map(p=>({word:p.content,cn:p.translation})), {word:current.content,cn:current.translation}].sort(()=>Math.random()-0.5);
+  const otherReviews = reviews.filter((_,i)=>i!==idx);
+  const pool = [...otherReviews].sort(()=>Math.random()-0.5).slice(0,2);
+  while(pool.length < 2) pool.push({content:"...", translation:"..."});
+  const options = [
+    ...pool.slice(0,2).map(p=>({word:p.content,cn:p.translation})),
+    {word:current.content, cn:current.translation}
+  ].sort(()=>Math.random()-0.5);
 
   async function handleSelect(opt) {
     if (selected !== null) return;
     setSelected(opt);
     const isCorrect = opt.word === current.content;
     if (isCorrect) { setCorrect(c=>c+1); playVictorySound(); }
-    const quality = isCorrect ? 2 : 0;
-    await updateReview(current.id, current.review_count, current.ease_factor, quality);
+    await updateReview(current.id, current.review_count, current.ease_factor, isCorrect?2:0);
   }
 
   function next() {
     if (idx + 1 >= reviews.length) { setDone(true); return; }
-    setIdx(i=>i+1); setSelected(null); setShowAnswer(false);
+    setIdx(i=>i+1); setSelected(null);
   }
 
   const { nextReview: previewNext } = selected
@@ -332,21 +349,31 @@ function ReviewScreen({reviews, accent, onDone}) {
 
   return (
     <div style={{maxWidth:"460px",margin:"0 auto",padding:"16px 14px"}}>
-      {/* 進度 */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}}>
         <div style={{fontSize:"12px",color:"#f5a623",fontFamily:"monospace"}}>🔁 複習 {idx+1} / {reviews.length}</div>
         <div style={{fontSize:"12px",color:"#52b788",fontFamily:"monospace"}}>✓ {correct}</div>
       </div>
-      {/* 進度條 */}
       <div style={{height:"3px",background:"rgba(255,255,255,0.07)",borderRadius:"3px",marginBottom:"20px",overflow:"hidden"}}>
         <div style={{height:"100%",background:accent,borderRadius:"3px",width:`${(idx/reviews.length)*100}%`,transition:"width 0.3s ease"}}/>
       </div>
-      {/* 題目 */}
-      <div style={{background:"rgba(255,255,255,0.05)",borderRadius:"16px",padding:"28px",textAlign:"center",marginBottom:"16px",border:`1px solid ${accent}22`}}>
-        <div style={{fontSize:"11px",letterSpacing:"2px",color:accent,textTransform:"uppercase",marginBottom:"10px",fontFamily:"monospace"}}>看中文，選英文</div>
-        <div style={{fontSize:"28px",fontWeight:"700",color:"#fff"}}>{current.translation}</div>
+
+      {/* 聽音區 */}
+      <div style={{background:"rgba(255,255,255,0.05)",borderRadius:"16px",padding:"32px 20px",textAlign:"center",marginBottom:"20px",border:`1px solid ${accent}33`}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:accent,textTransform:"uppercase",marginBottom:"16px",fontFamily:"monospace"}}>
+          👂 聽發音，選出正確的中文意思
+        </div>
+        <button onClick={()=>playWord(current.content)} style={{width:"80px",height:"80px",borderRadius:"50%",background:`${accent}22`,border:`2px solid ${accent}`,color:accent,fontSize:"32px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>
+          🔊
+        </button>
+        <div style={{fontSize:"12px",color:"#555"}}>點擊重聽</div>
+        {selected && (
+          <div style={{marginTop:"16px",padding:"10px",background:`${accent}11`,borderRadius:"10px"}}>
+            <div style={{fontSize:"22px",fontWeight:"700",color:"#fff"}}>{current.content}</div>
+          </div>
+        )}
       </div>
-      {/* 選項 */}
+
+      {/* 選項（中文）*/}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"16px"}}>
         {options.map((opt,i)=>{
           let bg="rgba(255,255,255,0.06)",border="1px solid rgba(255,255,255,0.1)",color="#ccc";
@@ -355,8 +382,8 @@ function ReviewScreen({reviews, accent, onDone}) {
             else if(opt.word===selected.word){bg="rgba(233,69,96,0.2)";border="1px solid #e94560";color="#e94560";}
           }
           return(
-            <button key={i} onClick={()=>handleSelect(opt)} style={{background:bg,border,color,borderRadius:"12px",padding:"16px 8px",fontSize:"13px",cursor:selected?"default":"pointer",fontWeight:"600",transition:"all 0.2s",fontFamily:"inherit"}}>
-              {opt.word}
+            <button key={i} onClick={()=>handleSelect(opt)} style={{background:bg,border,color,borderRadius:"12px",padding:"18px 8px",fontSize:"14px",cursor:selected?"default":"pointer",fontWeight:"600",transition:"all 0.2s",fontFamily:"inherit",lineHeight:"1.4"}}>
+              {opt.cn}
             </button>
           );
         })}
