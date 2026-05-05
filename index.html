@@ -59,15 +59,18 @@ async function saveWordToReview(word, chineseMeaning, partOfSpeech) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const nextReview = tomorrow.toISOString().split("T")[0];
-  await sb.from("user_progress").upsert({
+  const { data: existing } = await sb.from("user_progress")
+    .select("id").eq("user_id", USER_ID).eq("content", word).limit(1);
+  if (existing && existing.length > 0) return;
+  await sb.from("user_progress").insert({
     user_id: USER_ID,
-    content_type: "word",
+    content_type: partOfSpeech === "phrase" ? "phrase" : "word",
     content: word,
     translation: chineseMeaning,
     next_review: nextReview,
     review_count: 0,
     ease_factor: 2.5,
-  }, { onConflict: "user_id,content" });
+  });
 }
 
 // 載入今日複習（上限15個）
