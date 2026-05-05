@@ -318,7 +318,17 @@ function App() {
         }
       }
       setScreen("main");
-      loadMoreWords(data);
+      // 恢復上次的單字 queue
+      if (data.savedQueue && data.savedQueue.length > 0) {
+        setCurrentWord(data.savedQueue[0]);
+        setWordQueue(data.savedQueue.slice(1));
+        // 如果 queue 快空了，預先補充
+        if (data.savedQueue.length <= 3) {
+          loadMoreWords(data);
+        }
+      } else {
+        loadMoreWords(data);
+      }
     }
   }, []);
 
@@ -336,6 +346,7 @@ function App() {
       if (!currentWord && words.length > 0) {
         setCurrentWord(words[0]);
         setWordQueue(words.slice(1));
+        saveData({ ...data, savedQueue: words });
       }
     } catch(e) {
       setLoadError("無法生成單字，請稍後再試");
@@ -389,10 +400,15 @@ function App() {
     setSpeechPassed(false);
 
     if (wordQueue.length > 0) {
-      setCurrentWord(wordQueue[0]);
-      setWordQueue(prev => prev.slice(1));
+      const nextWord = wordQueue[0];
+      const newQueue = wordQueue.slice(1);
+      setCurrentWord(nextWord);
+      setWordQueue(newQueue);
+      // 儲存 queue 到 localStorage
+      saveData({ ...updated, savedQueue: [nextWord, ...newQueue] });
     } else {
       setCurrentWord(null);
+      saveData({ ...updated, savedQueue: [] });
       loadMoreWords(updated);
     }
 
