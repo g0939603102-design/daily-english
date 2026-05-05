@@ -1,4 +1,33 @@
 import { useState, useRef, useEffect } from "react";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+// ── Supabase 設定 ──
+const SUPABASE_URL = "https://urayzkbkzrdrvsdrsmiu.supabase.co";
+const SUPABASE_KEY = "sb_publishable_wzs-IyQONvOXTpwKq46kPw_x6Kww_4r";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 簡易 user_id（之後換成真正帳號系統）
+function getUserId() {
+  let id = localStorage.getItem("daily_english_uid");
+  if (!id) { id = "user_" + Math.random().toString(36).slice(2, 10); localStorage.setItem("daily_english_uid", id); }
+  return id;
+}
+
+const USER_ID = getUserId();
+
+// ── 間隔重複演算法（SM-2 簡化版）──
+function calcNextReview(reviewCount, easeFactor, quality) {
+  // quality: 0=完全錯, 1=有點對, 2=全對
+  let newEase = easeFactor + (0.1 - (2 - quality) * (0.08 + (2 - quality) * 0.02));
+  newEase = Math.max(1.3, newEase);
+  let interval = 1;
+  if (reviewCount === 0) interval = 1;
+  else if (reviewCount === 1) interval = 3;
+  else interval = Math.round((reviewCount - 1) * newEase);
+  const next = new Date();
+  next.setDate(next.getDate() + interval);
+  return { nextReview: next.toISOString().split("T")[0], newEase, interval };
+}
 
 const WORD_BANK = [
   [
@@ -268,39 +297,25 @@ function SpeechPractice({ word, accent }) {
 
   if (status === "unsupported") return (
     <div style={{ padding:"12px", background:"rgba(255,255,255,0.04)", borderRadius:"10px", fontSize:"12px", color:"#666", textAlign:"center", marginBottom:"14px" }}>
-      ⚠️ 此環境不支援語音辨識<br/>
-      <span style={{fontSize:"11px",color:"#444"}}>請用瀏覽器開啟獨立連結後使用</span>
+      ⚠️ 此環境不支援語音辨識
     </div>
   );
 
   return (
     <div style={{ padding:"16px", background:"rgba(255,255,255,0.04)", borderRadius:"12px", marginBottom:"14px" }}>
-      <div style={{ fontSize:"10px", letterSpacing:"2px", color:accent, textTransform:"uppercase", marginBottom:"10px", fontFamily:"monospace" }}>
-        🎤 跟讀練習
-      </div>
-      <div style={{ fontSize:"12px", color:"rgba(255,255,255,0.5)", marginBottom:"14px", lineHeight:"1.6" }}>
-        ① 先聽發音　② 跟著念　③ 按麥克風，AI 判斷對不對
-      </div>
-
+      <div style={{ fontSize:"10px", letterSpacing:"2px", color:accent, textTransform:"uppercase", marginBottom:"10px", fontFamily:"monospace" }}>🎤 跟讀練習</div>
+      <div style={{ fontSize:"12px", color:"rgba(255,255,255,0.5)", marginBottom:"14px", lineHeight:"1.6" }}>① 先聽發音　② 跟著念　③ 按麥克風，AI 判斷對不對</div>
       <div style={{ display:"flex", gap:"8px", alignItems:"center", flexWrap:"wrap" }}>
         <SpeakBtn text={word} label="① 聽發音" accent={accent} rate={0.7} />
-
         {status === "idle" && (
-          <button onClick={startListening} style={{
-            display:"inline-flex", alignItems:"center", gap:"6px",
-            background:`${accent}`, border:"none",
-            color:"#fff", borderRadius:"20px", padding:"6px 16px",
-            fontSize:"12px", cursor:"pointer", fontWeight:"600"
-          }}>🎤 ② 我來念</button>
+          <button onClick={startListening} style={{ display:"inline-flex", alignItems:"center", gap:"6px", background:accent, border:"none", color:"#fff", borderRadius:"20px", padding:"6px 16px", fontSize:"12px", cursor:"pointer", fontWeight:"600" }}>🎤 ② 我來念</button>
         )}
-
         {status === "listening" && (
           <div style={{ display:"inline-flex", alignItems:"center", gap:"8px" }}>
-            <span style={{ color:"#f5a623", fontSize:"12px", animation:"pulse 0.8s infinite" }}>🔴 聆聽中，請念出單字...</span>
+            <span style={{ color:"#f5a623", fontSize:"12px" }}>🔴 聆聽中，請念出單字...</span>
             <button onClick={reset} style={{ background:"none", border:"1px solid rgba(255,255,255,0.15)", color:"#666", borderRadius:"10px", padding:"3px 10px", fontSize:"11px", cursor:"pointer" }}>取消</button>
           </div>
         )}
-
         {status === "success" && (
           <div style={{ display:"flex", flexDirection:"column", gap:"8px", flex:1 }}>
             <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
@@ -311,7 +326,6 @@ function SpeechPractice({ word, accent }) {
             <button onClick={reset} style={{ alignSelf:"flex-start", background:"none", border:`1px solid ${accent}44`, color:accent, borderRadius:"12px", padding:"4px 14px", fontSize:"12px", cursor:"pointer" }}>再練一次</button>
           </div>
         )}
-
         {status === "fail" && (
           <div style={{ display:"flex", flexDirection:"column", gap:"8px", flex:1 }}>
             <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
@@ -322,12 +336,11 @@ function SpeechPractice({ word, accent }) {
               {heard ? <>你說的：<span style={{color:"#bbb"}}>"{heard}"</span><br/>目標：<span style={{color:accent}}>"{word}"</span></> : "沒清楚辨識到，說大聲清楚一點"}
             </div>
             <div style={{ display:"flex", gap:"8px" }}>
-              <button onClick={startListening} style={{ background:`${accent}`, border:"none", color:"#fff", borderRadius:"12px", padding:"6px 16px", fontSize:"12px", cursor:"pointer", fontWeight:"600" }}>🎤 再念一次</button>
+              <button onClick={startListening} style={{ background:accent, border:"none", color:"#fff", borderRadius:"12px", padding:"6px 16px", fontSize:"12px", cursor:"pointer", fontWeight:"600" }}>🎤 再念一次</button>
               <SpeakBtn text={word} label="再聽一次" accent={accent} rate={0.6} />
             </div>
           </div>
         )}
-
         {status === "error" && (
           <div style={{ display:"flex", flexDirection:"column", gap:"8px", flex:1 }}>
             <div style={{ fontSize:"12px", color:"#f5a623" }}>⚠️ {errorMsg}</div>
@@ -339,7 +352,92 @@ function SpeechPractice({ word, accent }) {
   );
 }
 
-// ── 測驗 ──
+// ── 今日複習模式 ──
+function ReviewMode({ reviews, onDone }) {
+  const [qIndex, setQIndex] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [done, setDone] = useState(false);
+  const [correct, setCorrect] = useState(0);
+
+  if (!reviews || reviews.length === 0) return (
+    <div style={{ textAlign:"center", padding:"40px 20px", color:"#888" }}>
+      <div style={{ fontSize:"40px", marginBottom:"12px" }}>🎉</div>
+      <div style={{ fontSize:"16px", color:"#fff", marginBottom:"8px" }}>今天沒有需要複習的單字！</div>
+      <div style={{ fontSize:"13px" }}>繼續學習新單字，明天會出現複習題</div>
+    </div>
+  );
+
+  const current = reviews[qIndex];
+  const pool = reviews.filter((_, i) => i !== qIndex).slice(0, 2);
+  const allWords = WORD_BANK.flat();
+  while (pool.length < 2) {
+    const rand = allWords[Math.floor(Math.random() * allWords.length)];
+    if (!pool.find(p => p.content === rand.word) && rand.word !== current.content) pool.push({ content: rand.word, translation: rand.chineseMeaning });
+  }
+  const options = [...pool.slice(0, 2), { content: current.content, translation: current.translation }].sort(() => Math.random() - 0.5);
+
+  async function handleSelect(opt) {
+    if (selected !== null) return;
+    setSelected(opt);
+    const isCorrect = opt.content === current.content;
+    if (isCorrect) setCorrect(c => c + 1);
+    const quality = isCorrect ? 2 : 0;
+    const { nextReview, newEase } = calcNextReview(current.review_count, current.ease_factor, quality);
+    await supabase.from("user_progress").update({
+      next_review: nextReview,
+      review_count: current.review_count + 1,
+      ease_factor: newEase,
+    }).eq("id", current.id);
+  }
+
+  function next() {
+    if (qIndex + 1 >= reviews.length) { setDone(true); onDone(); return; }
+    setQIndex(q => q + 1); setSelected(null);
+  }
+
+  if (done) return (
+    <div style={{ textAlign:"center", padding:"40px 20px" }}>
+      <div style={{ fontSize:"52px", marginBottom:"16px" }}>{correct === reviews.length ? "🔥" : "💪"}</div>
+      <div style={{ fontSize:"24px", fontWeight:"700", color:"#fff", marginBottom:"8px" }}>{correct} / {reviews.length} 答對</div>
+      <div style={{ fontSize:"13px", color:"#888" }}>複習完成！間隔已自動調整</div>
+    </div>
+  );
+
+  const c = CARD_COLORS[qIndex % CARD_COLORS.length];
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"16px" }}>
+        <div style={{ fontSize:"12px", color:"#f5a623", fontFamily:"monospace" }}>🔁 複習 {qIndex+1}/{reviews.length}</div>
+        <div style={{ fontSize:"12px", color:"#52b788", fontFamily:"monospace" }}>✓ {correct}</div>
+      </div>
+      <div style={{ background:c.light, borderRadius:"16px", padding:"28px", textAlign:"center", marginBottom:"16px" }}>
+        <div style={{ fontSize:"11px", color:c.accent, letterSpacing:"2px", textTransform:"uppercase", marginBottom:"10px", fontFamily:"monospace" }}>看中文，選英文</div>
+        <div style={{ fontSize:"30px", fontWeight:"700", color:"#fff" }}>{current.translation}</div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"10px", marginBottom:"16px" }}>
+        {options.map((opt, i) => {
+          let bg = "rgba(255,255,255,0.06)", border = "1px solid rgba(255,255,255,0.1)", color = "#ccc";
+          if (selected !== null) {
+            if (opt.content === current.content) { bg = "rgba(82,183,136,0.2)"; border = "1px solid #52b788"; color = "#52b788"; }
+            else if (opt.content === selected.content) { bg = "rgba(233,69,96,0.2)"; border = "1px solid #e94560"; color = "#e94560"; }
+          }
+          return (
+            <button key={i} onClick={() => handleSelect(opt)} style={{ background:bg, border, color, borderRadius:"12px", padding:"16px 8px", fontSize:"13px", cursor:selected?"default":"pointer", fontWeight:"600", transition:"all 0.2s", fontFamily:"inherit" }}>
+              {opt.content}
+            </button>
+          );
+        })}
+      </div>
+      {selected && (
+        <button onClick={next} style={{ width:"100%", background:c.accent, border:"none", color:"#fff", borderRadius:"10px", padding:"13px", fontSize:"14px", cursor:"pointer", fontWeight:"600" }}>
+          {qIndex + 1 >= reviews.length ? "完成複習 🎉" : "下一題 →"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── 測驗模式 ──
 function QuizMode({ words }) {
   const [qIndex, setQIndex] = useState(0);
   const [selected, setSelected] = useState(null);
@@ -408,7 +506,7 @@ function QuizMode({ words }) {
             else if (opt.word === selected.word) { bg = "rgba(233,69,96,0.2)"; border = "1px solid #e94560"; color = "#e94560"; }
           }
           return (
-            <button key={i} onClick={() => handleSelect(opt)} style={{ background:bg, border, color, borderRadius:"12px", padding:"16px 8px", fontSize:"14px", cursor: selected ? "default":"pointer", fontWeight:"600", transition:"all 0.2s", fontFamily:"inherit" }}>
+            <button key={i} onClick={() => handleSelect(opt)} style={{ background:bg, border, color, borderRadius:"12px", padding:"16px 8px", fontSize:"14px", cursor:selected?"default":"pointer", fontWeight:"600", transition:"all 0.2s", fontFamily:"inherit" }}>
               {opt.word}
             </button>
           );
@@ -434,11 +532,52 @@ export default function DailyWordsApp() {
   const [active, setActive] = useState(0);
   const [revealed, setRevealed] = useState({});
   const [learned, setLearned] = useState({});
+  const [reviews, setReviews] = useState([]);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [loadingReviews, setLoadingReviews] = useState(true);
 
   const setIndex = getDaySet();
   const words = WORD_BANK[setIndex];
   const today = new Date().toLocaleDateString("zh-TW", { year:"numeric", month:"long", day:"numeric", weekday:"long" });
   const learnedCount = Object.values(learned).filter(Boolean).length;
+
+  // 載入今日複習
+  useEffect(() => {
+    async function loadReviews() {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const { data, error } = await supabase
+        .from("user_progress")
+        .select("*")
+        .eq("user_id", USER_ID)
+        .lte("next_review", todayStr)
+        .order("next_review", { ascending: true });
+      if (!error && data) { setReviews(data); setReviewCount(data.length); }
+      setLoadingReviews(false);
+    }
+    loadReviews();
+  }, []);
+
+  // 標記學會 → 寫入 Supabase
+  async function toggleLearned(i) {
+    const word = words[i];
+    const isLearned = !learned[i];
+    setLearned(l => ({ ...l, [i]: isLearned }));
+    if (isLearned) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const nextReview = tomorrow.toISOString().split("T")[0];
+      const { error } = await supabase.from("user_progress").upsert({
+        user_id: USER_ID,
+        content_type: word.partOfSpeech === "phrase" ? "phrase" : "word",
+        content: word.word,
+        translation: word.chineseMeaning,
+        next_review: nextReview,
+        review_count: 0,
+        ease_factor: 2.5,
+      }, { onConflict: "user_id,content" });
+      if (error) console.error("Supabase error:", error);
+    }
+  }
 
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0a0a0f 0%,#12121f 50%,#0a0a0f 100%)", fontFamily:"'Georgia','Times New Roman',serif", color:"#f0ede8" }}>
@@ -460,18 +599,30 @@ export default function DailyWordsApp() {
         )}
       </div>
 
-      <div style={{ display:"flex", justifyContent:"center", gap:"10px", padding:"14px 20px 0" }}>
-        {[["learn","📖 學習"],["quiz","🧠 測驗"]].map(([m, label]) => (
+      <div style={{ display:"flex", justifyContent:"center", gap:"8px", padding:"14px 20px 0", flexWrap:"wrap" }}>
+        {[
+          ["learn","📖 學習"],
+          ["review", `🔁 複習${reviewCount > 0 ? ` (${reviewCount})` : ""}`],
+          ["quiz","🧠 測驗"]
+        ].map(([m, label]) => (
           <button key={m} onClick={() => setMode(m)} style={{
-            padding:"8px 24px", borderRadius:"20px", border:"none",
-            background: mode === m ? "#f5a623" : "rgba(255,255,255,0.08)",
-            color: mode === m ? "#000" : "#999",
-            fontSize:"13px", cursor:"pointer", fontWeight: mode === m ? "700":"400", transition:"all 0.2s"
+            padding:"8px 20px", borderRadius:"20px", border:"none",
+            background: mode === m ? (m === "review" ? "#f5a623" : "#f5a623") : "rgba(255,255,255,0.08)",
+            color: mode === m ? "#000" : (m === "review" && reviewCount > 0 ? "#f5a623" : "#999"),
+            fontSize:"13px", cursor:"pointer", fontWeight: mode === m ? "700":"400", transition:"all 0.2s",
+            border: m === "review" && reviewCount > 0 && mode !== "review" ? "1px solid #f5a62366" : "none"
           }}>{label}</button>
         ))}
       </div>
 
       <div style={{ maxWidth:"420px", margin:"0 auto", padding:"16px 14px" }}>
+
+        {mode === "review" && (
+          loadingReviews
+            ? <div style={{ textAlign:"center", padding:"40px", color:"#666" }}>載入複習中...</div>
+            : <ReviewMode reviews={reviews} onDone={() => { setReviews([]); setReviewCount(0); }} />
+        )}
+
         {mode === "quiz" && <QuizMode words={words} />}
 
         {mode === "learn" && (<>
@@ -507,38 +658,30 @@ export default function DailyWordsApp() {
                 </div>
 
                 <div style={{ padding:"18px 22px 0" }}>
-                  {/* 跟讀練習 */}
                   <SpeechPractice word={word.word} accent={c.accent} />
-
-                  {/* 例句 */}
                   <div style={{ marginBottom:"12px", padding:"16px", background:"rgba(255,255,255,0.04)", borderRadius:"12px", borderLeft:`3px solid ${c.accent}` }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"10px" }}>
                       <div style={{ fontSize:"10px", letterSpacing:"2px", color:"#666", textTransform:"uppercase", fontFamily:"monospace" }}>例句</div>
                       <SpeakBtn text={word.example} label="聽例句" accent={c.accent} rate={0.82} />
                     </div>
-                    <div style={{ fontSize:"15px", color:"#e8e4de", lineHeight:"1.7", marginBottom:"10px", fontStyle:"italic" }}>
-                      "{word.example}"
-                    </div>
+                    <div style={{ fontSize:"15px", color:"#e8e4de", lineHeight:"1.7", marginBottom:"10px", fontStyle:"italic" }}>"{word.example}"</div>
                     {revealed[i]
                       ? <div style={{ fontSize:"13px", color:"#888", lineHeight:"1.5" }}>{word.exampleTranslation}</div>
                       : <button onClick={() => setRevealed(r => ({...r,[i]:true}))} style={{ background:"none", border:"1px solid rgba(255,255,255,0.12)", color:"#888", borderRadius:"6px", padding:"5px 12px", fontSize:"12px", cursor:"pointer" }}>顯示翻譯</button>
                     }
                   </div>
-
-                  {/* 小技巧 */}
                   <div style={{ padding:"14px", background:`${c.accent}11`, borderRadius:"12px", border:`1px solid ${c.accent}22`, marginBottom:"14px" }}>
                     <div style={{ fontSize:"10px", letterSpacing:"2px", color:c.accent, textTransform:"uppercase", marginBottom:"6px", fontFamily:"monospace" }}>💡 記憶小技巧</div>
                     <div style={{ fontSize:"13px", color:"rgba(255,255,255,0.65)", lineHeight:"1.6" }}>{word.tip}</div>
                   </div>
-
-                  <button onClick={() => setLearned(l => ({...l,[i]:!l[i]}))} style={{
+                  <button onClick={() => toggleLearned(i)} style={{
                     width:"100%", padding:"12px",
                     background: learned[i] ? `${c.accent}33` : "rgba(255,255,255,0.05)",
                     border:`1px solid ${learned[i] ? c.accent : "rgba(255,255,255,0.1)"}`,
                     color: learned[i] ? c.accent : "#666",
                     borderRadius:"10px", fontSize:"13px", cursor:"pointer",
                     fontWeight: learned[i] ? "700":"400", marginBottom:"4px", transition:"all 0.2s"
-                  }}>{learned[i] ? "✓ 學會了！" : "標記為已學會"}</button>
+                  }}>{learned[i] ? "✓ 學會了！（已加入複習排程）" : "標記為已學會"}</button>
                 </div>
 
                 <div style={{ padding:"12px 22px 22px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
