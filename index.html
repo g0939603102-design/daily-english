@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>每日英文練習</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -24,8 +25,76 @@ button { font-family: inherit; }
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel">
-const { useState, useRef, useEffect } = React;
+const { useState, useRef, useEffect, useCallback } = React;
 
+// ── Supabase ──
+const SUPABASE_URL = "https://urayzkbkzrdrvsdrsmiu.supabase.co";
+const SUPABASE_KEY = "sb_publishable_wzs-IyQONvOXTpwKq46kPw_x6Kww_4r";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+function getUserId() {
+  let id = localStorage.getItem("daily_english_uid");
+  if (!id) { id = "user_" + Math.random().toString(36).slice(2, 10); localStorage.setItem("daily_english_uid", id); }
+  return id;
+}
+const USER_ID = getUserId();
+
+// ── SM-2 間隔重複演算法 ──
+function calcNextReview(reviewCount, easeFactor, quality) {
+  // quality: 0=完全錯, 1=有點對, 2=全對
+  let newEase = easeFactor + (0.1 - (2 - quality) * (0.08 + (2 - quality) * 0.02));
+  newEase = Math.max(1.3, newEase);
+  let interval;
+  if (quality === 0) { interval = 1; } // 答錯：明天再來
+  else if (reviewCount === 0) { interval = 1; }
+  else if (reviewCount === 1) { interval = 3; }
+  else { interval = Math.round((reviewCount) * newEase); }
+  const next = new Date();
+  next.setDate(next.getDate() + interval);
+  return { nextReview: next.toISOString().split("T")[0], newEase, interval };
+}
+
+// 寫入學習記錄
+async function saveWordToReview(word, chineseMeaning, partOfSpeech) {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const nextReview = tomorrow.toISOString().split("T")[0];
+  await sb.from("user_progress").upsert({
+    user_id: USER_ID,
+    content_type: "word",
+    content: word,
+    translation: chineseMeaning,
+    next_review: nextReview,
+    review_count: 0,
+    ease_factor: 2.5,
+  }, { onConflict: "user_id,content" });
+}
+
+// 載入今日複習（上限15個）
+async function loadTodayReviews() {
+  const today = new Date().toISOString().split("T")[0];
+  const { data, error } = await sb
+    .from("user_progress")
+    .select("*")
+    .eq("user_id", USER_ID)
+    .lte("next_review", today)
+    .order("next_review", { ascending: true })
+    .limit(15);
+  if (error) return [];
+  return data || [];
+}
+
+// 更新複習結果
+async function updateReview(id, reviewCount, easeFactor, quality) {
+  const { nextReview, newEase } = calcNextReview(reviewCount, easeFactor, quality);
+  await sb.from("user_progress").update({
+    next_review: nextReview,
+    review_count: reviewCount + 1,
+    ease_factor: newEase,
+  }).eq("id", id);
+}
+
+// ── 常數 ──
 const TOPICS = [
   { id:"daily",    label:"日常生活", emoji:"🏠", desc:"吃飯、購物、交通、家居",   color:{bg:"#0d1b2a",accent:"#4a9eda",light:"#112233"} },
   { id:"travel",   label:"旅遊出行", emoji:"✈️", desc:"機場、飯店、問路、景點",   color:{bg:"#0d2018",accent:"#52b788",light:"#122a1e"} },
@@ -75,15 +144,11 @@ function strictMatch(heard,target) {
 function playVictorySound() {
   try {
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    // 歡快的勝利旋律：Do Mi Sol Do' Mi' Sol' Do''
     const notes=[
-      {freq:523,start:0,    dur:0.10,vol:0.35},  // C5
-      {freq:659,start:0.09, dur:0.10,vol:0.35},  // E5
-      {freq:784,start:0.18, dur:0.10,vol:0.35},  // G5
-      {freq:1047,start:0.27,dur:0.10,vol:0.4},   // C6
-      {freq:1319,start:0.36,dur:0.10,vol:0.4},   // E6
-      {freq:1568,start:0.45,dur:0.10,vol:0.4},   // G6
-      {freq:2093,start:0.54,dur:0.30,vol:0.5},   // C7 長音收尾
+      {freq:523,start:0,dur:0.10,vol:0.35},{freq:659,start:0.09,dur:0.10,vol:0.35},
+      {freq:784,start:0.18,dur:0.10,vol:0.35},{freq:1047,start:0.27,dur:0.10,vol:0.4},
+      {freq:1319,start:0.36,dur:0.10,vol:0.4},{freq:1568,start:0.45,dur:0.10,vol:0.4},
+      {freq:2093,start:0.54,dur:0.30,vol:0.5},
     ];
     notes.forEach(({freq,start,dur,vol})=>{
       const osc=ctx.createOscillator(),gain=ctx.createGain();
@@ -96,21 +161,10 @@ function playVictorySound() {
       osc.start(ctx.currentTime+start);
       osc.stop(ctx.currentTime+start+dur+0.05);
     });
-    // 加一點和聲讓聲音更豐富
-    [{freq:659,start:0.54,dur:0.30},{freq:784,start:0.54,dur:0.30}].forEach(({freq,start,dur})=>{
-      const osc=ctx.createOscillator(),gain=ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type="sine";
-      osc.frequency.setValueAtTime(freq,ctx.currentTime+start);
-      gain.gain.setValueAtTime(0,ctx.currentTime+start);
-      gain.gain.linearRampToValueAtTime(0.2,ctx.currentTime+start+0.015);
-      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
-      osc.start(ctx.currentTime+start);
-      osc.stop(ctx.currentTime+start+dur+0.05);
-    });
   } catch(e){}
 }
 
+// ── 發音按鈕 ──
 function SpeakBtn({text,label,accent,rate}) {
   const [playing,setPlaying]=useState(false);
   function speak() {
@@ -131,6 +185,7 @@ function SpeakBtn({text,label,accent,rate}) {
   );
 }
 
+// ── 跟讀練習 ──
 function SpeechPractice({word,accent,onPass}) {
   const [status,setStatus]=useState("idle");
   const [heard,setHeard]=useState("");
@@ -179,12 +234,12 @@ function SpeechPractice({word,accent,onPass}) {
         {status==="idle"&&<button onClick={startListen} style={{display:"inline-flex",alignItems:"center",gap:"6px",background:accent,border:"none",color:"#fff",borderRadius:"20px",padding:"7px 16px",fontSize:"13px",cursor:"pointer",fontWeight:"700"}}>🎤 我來念</button>}
         {status==="listening"&&(
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
-            <span style={{color:"#f5a623",animation:"pulse 0.6s infinite",fontSize:"13px"}}>🔴 聆聽中...</span>
+            <span style={{color:"#f5a623",fontSize:"13px"}}>🔴 聆聽中...</span>
             <button onClick={reset} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#777",borderRadius:"10px",padding:"4px 10px",fontSize:"12px",cursor:"pointer"}}>取消</button>
           </div>
         )}
         {status==="success"&&(
-          <div style={{display:"flex",alignItems:"center",gap:"8px",animation:"pop 0.3s ease"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             <span style={{fontSize:"22px"}}>✅</span>
             <div>
               <div style={{color:"#52b788",fontSize:"14px",fontWeight:"700"}}>發音正確！</div>
@@ -219,6 +274,112 @@ function SpeechPractice({word,accent,onPass}) {
   );
 }
 
+// ── 複習模式 ──
+function ReviewScreen({reviews, accent, onDone}) {
+  const [idx, setIdx] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [correct, setCorrect] = useState(0);
+  const [done, setDone] = useState(false);
+  const [showAnswer, setShowAnswer] = useState(false);
+
+  if (!reviews || reviews.length === 0) {
+    return (
+      <div style={{textAlign:"center",padding:"60px 20px"}}>
+        <div style={{fontSize:"48px",marginBottom:"16px"}}>🎉</div>
+        <div style={{fontSize:"18px",color:"#fff",marginBottom:"8px",fontWeight:"600"}}>今天沒有複習任務！</div>
+        <div style={{fontSize:"13px",color:"#666",marginBottom:"28px"}}>繼續學習新單字吧</div>
+        <button onClick={onDone} style={{background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"13px 32px",fontSize:"15px",cursor:"pointer",fontWeight:"700"}}>學新單字 →</button>
+      </div>
+    );
+  }
+
+  if (done) {
+    return (
+      <div style={{textAlign:"center",padding:"60px 20px"}}>
+        <div style={{fontSize:"52px",marginBottom:"16px"}}>{correct===reviews.length?"🔥":"💪"}</div>
+        <div style={{fontSize:"26px",fontWeight:"700",color:"#fff",marginBottom:"8px"}}>{correct} / {reviews.length} 答對</div>
+        <div style={{fontSize:"13px",color:"#888",marginBottom:"8px"}}>複習完成！間隔已自動調整</div>
+        <div style={{fontSize:"12px",color:"#555",marginBottom:"28px"}}>答對的單字下次會更晚出現 ✨</div>
+        <button onClick={onDone} style={{background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"13px 32px",fontSize:"15px",cursor:"pointer",fontWeight:"700"}}>學新單字 →</button>
+      </div>
+    );
+  }
+
+  const current = reviews[idx];
+  // 產生選項
+  const allReviews = reviews.filter((_,i)=>i!==idx);
+  const pool = allReviews.sort(()=>Math.random()-0.5).slice(0,2);
+  while(pool.length < 2) pool.push({content:"...",translation:"..."});
+  const options = [...pool.map(p=>({word:p.content,cn:p.translation})), {word:current.content,cn:current.translation}].sort(()=>Math.random()-0.5);
+
+  async function handleSelect(opt) {
+    if (selected !== null) return;
+    setSelected(opt);
+    const isCorrect = opt.word === current.content;
+    if (isCorrect) { setCorrect(c=>c+1); playVictorySound(); }
+    const quality = isCorrect ? 2 : 0;
+    await updateReview(current.id, current.review_count, current.ease_factor, quality);
+  }
+
+  function next() {
+    if (idx + 1 >= reviews.length) { setDone(true); return; }
+    setIdx(i=>i+1); setSelected(null); setShowAnswer(false);
+  }
+
+  const { nextReview: previewNext } = selected
+    ? calcNextReview(current.review_count, current.ease_factor, selected.word===current.content?2:0)
+    : { nextReview: "" };
+
+  return (
+    <div style={{maxWidth:"460px",margin:"0 auto",padding:"16px 14px"}}>
+      {/* 進度 */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
+        <div style={{fontSize:"12px",color:"#f5a623",fontFamily:"monospace"}}>🔁 複習 {idx+1} / {reviews.length}</div>
+        <div style={{fontSize:"12px",color:"#52b788",fontFamily:"monospace"}}>✓ {correct}</div>
+      </div>
+      {/* 進度條 */}
+      <div style={{height:"3px",background:"rgba(255,255,255,0.07)",borderRadius:"3px",marginBottom:"20px",overflow:"hidden"}}>
+        <div style={{height:"100%",background:accent,borderRadius:"3px",width:`${(idx/reviews.length)*100}%`,transition:"width 0.3s ease"}}/>
+      </div>
+      {/* 題目 */}
+      <div style={{background:"rgba(255,255,255,0.05)",borderRadius:"16px",padding:"28px",textAlign:"center",marginBottom:"16px",border:`1px solid ${accent}22`}}>
+        <div style={{fontSize:"11px",letterSpacing:"2px",color:accent,textTransform:"uppercase",marginBottom:"10px",fontFamily:"monospace"}}>看中文，選英文</div>
+        <div style={{fontSize:"28px",fontWeight:"700",color:"#fff"}}>{current.translation}</div>
+      </div>
+      {/* 選項 */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"16px"}}>
+        {options.map((opt,i)=>{
+          let bg="rgba(255,255,255,0.06)",border="1px solid rgba(255,255,255,0.1)",color="#ccc";
+          if(selected!==null){
+            if(opt.word===current.content){bg="rgba(82,183,136,0.2)";border="1px solid #52b788";color="#52b788";}
+            else if(opt.word===selected.word){bg="rgba(233,69,96,0.2)";border="1px solid #e94560";color="#e94560";}
+          }
+          return(
+            <button key={i} onClick={()=>handleSelect(opt)} style={{background:bg,border,color,borderRadius:"12px",padding:"16px 8px",fontSize:"13px",cursor:selected?"default":"pointer",fontWeight:"600",transition:"all 0.2s",fontFamily:"inherit"}}>
+              {opt.word}
+            </button>
+          );
+        })}
+      </div>
+      {/* 結果 */}
+      {selected && (
+        <>
+          <div style={{padding:"12px",background:"rgba(255,255,255,0.04)",borderRadius:"10px",fontSize:"12px",color:"#888",textAlign:"center",marginBottom:"12px"}}>
+            {selected.word===current.content
+              ? <span style={{color:"#52b788"}}>✅ 答對！下次 <strong>{previewNext}</strong> 複習</span>
+              : <span style={{color:"#e94560"}}>❌ 正確答案：<strong style={{color:"#fff"}}>{current.content}</strong>　明天再來一次</span>
+            }
+          </div>
+          <button onClick={next} style={{width:"100%",background:accent,border:"none",color:"#fff",borderRadius:"10px",padding:"13px",fontSize:"14px",cursor:"pointer",fontWeight:"600"}}>
+            {idx+1>=reviews.length?"完成複習 🎉":"下一題 →"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 設定畫面 ──
 function SetupScreen({onComplete}) {
   const [topic,setTopic]=useState(null);
   return(
@@ -245,10 +406,11 @@ function SetupScreen({onComplete}) {
   );
 }
 
+// ── Level Up Modal ──
 function LevelUpModal({level,accent,onClose}) {
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-      <div style={{animation:"levelUp 0.5s ease",textAlign:"center",padding:"20px"}}>
+      <div style={{textAlign:"center",padding:"20px"}}>
         <div style={{fontSize:"80px",marginBottom:"16px"}}>{level.emoji}</div>
         <div style={{fontSize:"13px",letterSpacing:"4px",textTransform:"uppercase",color:accent,marginBottom:"8px"}}>Level Up!</div>
         <div style={{fontSize:"30px",fontWeight:"700",color:"#fff",marginBottom:"8px"}}>{level.label}</div>
@@ -259,56 +421,72 @@ function LevelUpModal({level,accent,onClose}) {
   );
 }
 
+// ── 主 App ──
 function App() {
   const [appData,setAppData]=useState(null);
-  const [screen,setScreen]=useState("init");
+  const [screen,setScreen]=useState("init"); // init | setup | review | main
   const [history,setHistory]=useState([]);
   const [wordQueue,setWordQueue]=useState([]);
   const [currentIdx,setCurrentIdx]=useState(-1);
   const [currentWord,setCurrentWord]=useState(null);
   const [loading,setLoading]=useState(false);
   const [loadError,setLoadError]=useState(null);
-  const [showEx,setShowEx]=useState(false);
   const [revealed,setRevealed]=useState(false);
   const [speechPassed,setSpeechPassed]=useState(false);
   const [showStreak,setShowStreak]=useState(false);
   const [showLevelUp,setShowLevelUp]=useState(null);
+  const [reviews,setReviews]=useState([]);
+  const [reviewCount,setReviewCount]=useState(0);
   const loadingRef=useRef(false);
 
   const isInHistory=currentIdx>=0;
   const displayWord=isInHistory?history[currentIdx]:currentWord;
 
   useEffect(()=>{
-    const data=loadData();
-    if(!data||!data.topic){setScreen("setup");return;}
-    setAppData(data);
-    const today=getToday();
-    let updated=data;
-    if(data.lastCheckin!==today){
-      const yesterday=new Date(); yesterday.setDate(yesterday.getDate()-1);
-      const yStr=yesterday.toISOString().slice(0,10);
-      const newStreak=data.lastCheckin===yStr?(data.streak||0)+1:1;
-      updated={...data,lastCheckin:today,streak:newStreak};
-      setAppData(updated); saveData(updated);
-      if(newStreak>(data.streak||0)){setShowStreak(true);setTimeout(()=>setShowStreak(false),2500);}
+    async function init() {
+      const data=loadData();
+      if(!data||!data.topic){setScreen("setup");return;}
+      setAppData(data);
+      const today=getToday();
+      let updated=data;
+      if(data.lastCheckin!==today){
+        const yesterday=new Date(); yesterday.setDate(yesterday.getDate()-1);
+        const yStr=yesterday.toISOString().slice(0,10);
+        const newStreak=data.lastCheckin===yStr?(data.streak||0)+1:1;
+        updated={...data,lastCheckin:today,streak:newStreak};
+        setAppData(updated); saveData(updated);
+        if(newStreak>(data.streak||0)){setShowStreak(true);setTimeout(()=>setShowStreak(false),2500);}
+      }
+      // 載入今日複習
+      const todayReviews = await loadTodayReviews();
+      setReviews(todayReviews);
+      setReviewCount(todayReviews.length);
+      if(todayReviews.length>0){
+        setScreen("review");
+      } else {
+        setScreen("main");
+        startLearning(updated);
+      }
     }
-    setScreen("main");
-    if(updated.savedQueue&&updated.savedQueue.length>0){
-      setCurrentWord(updated.savedQueue[0]);
-      setWordQueue(updated.savedQueue.slice(1));
-      if(updated.savedQueue.length<=3) loadMoreWords(updated);
-    } else {
-      loadMoreWords(updated);
-    }
+    init();
   },[]);
+
+  function startLearning(data) {
+    if(data.savedQueue&&data.savedQueue.length>0){
+      setCurrentWord(data.savedQueue[0]);
+      setWordQueue(data.savedQueue.slice(1));
+      if(data.savedQueue.length<=3) loadMoreWords(data);
+    } else {
+      loadMoreWords(data);
+    }
+  }
 
   async function loadMoreWords(data) {
     if(loadingRef.current) return;
     loadingRef.current=true; setLoading(true); setLoadError(null);
     try{
       const level=getCurrentLevel(data.totalWords||0);
-      // 取得已看過的單字清單（避免重複）
-      const seenWords=(data.seenWords||[]).slice(-50); // 最多傳最近50個
+      const seenWords=(data.seenWords||[]).slice(-50);
       const words=await fetchWords(data.topic,level.id,8,seenWords);
       setWordQueue(prev=>[...prev,...words]);
       setCurrentWord(prev=>{
@@ -323,12 +501,12 @@ function App() {
     finally{loadingRef.current=false;setLoading(false);}
   }
 
-  function handleNext() {
+  async function handleNext() {
     if(isInHistory){
       const nextIdx=currentIdx+1;
       if(nextIdx>=history.length){setCurrentIdx(-1);}
       else{setCurrentIdx(nextIdx);setCurrentWord(history[nextIdx]);}
-      setShowEx(false);setRevealed(false);setSpeechPassed(false);
+      setRevealed(false);setSpeechPassed(false);
       return;
     }
     const data=appData;
@@ -339,12 +517,15 @@ function App() {
     const oldLevel=getCurrentLevel(data.totalWords||0);
     const newLevel=getCurrentLevel(newTotal);
     const leveledUp=newLevel.id!==oldLevel.id;
-    // 記錄已看過的單字（避免重複）
     const newSeenWords=[...(data.seenWords||[]),currentWord?.word].filter(Boolean);
     const updated={...data,totalWords:newTotal,[todayKey]:newTodayCount,seenWords:newSeenWords.slice(-100)};
     setAppData(updated);
-    if(currentWord) setHistory(prev=>[...prev,currentWord]);
-    setShowEx(false);setRevealed(false);setSpeechPassed(false);
+    // 寫入 Supabase 複習排程
+    if(currentWord) {
+      await saveWordToReview(currentWord.word, currentWord.chineseMeaning, currentWord.partOfSpeech);
+      setHistory(prev=>[...prev,currentWord]);
+    }
+    setRevealed(false);setSpeechPassed(false);
     if(leveledUp) setShowLevelUp(newLevel);
     if(wordQueue.length>0){
       const nextWord=wordQueue[0]; const newQueue=wordQueue.slice(1);
@@ -362,12 +543,17 @@ function App() {
     if(history.length===0) return;
     if(isInHistory&&currentIdx>0){setCurrentIdx(currentIdx-1);setCurrentWord(history[currentIdx-1]);}
     else if(!isInHistory){setCurrentIdx(history.length-1);setCurrentWord(history[history.length-1]);}
-    setShowEx(false);setRevealed(false);setSpeechPassed(false);
+    setRevealed(false);setSpeechPassed(false);
   }
 
   function handleSetup(topic) {
     const newData={topic,totalWords:0,streak:0,lastCheckin:getToday(),createdAt:getToday()};
     setAppData(newData); saveData(newData); setScreen("main"); loadMoreWords(newData);
+  }
+
+  function handleReviewDone() {
+    setReviews([]); setScreen("main");
+    if(appData) startLearning(appData);
   }
 
   if(screen==="setup") return <SetupScreen onComplete={handleSetup}/>;
@@ -377,7 +563,6 @@ function App() {
   const currentLevel=getCurrentLevel(data?.totalWords||0);
   const nextLevel=getNextLevel(data?.totalWords||0);
   const topicInfo=TOPICS.find(t=>t.id===data?.topic);
-  const today=new Date().toLocaleDateString("zh-TW",{month:"long",day:"numeric",weekday:"long"});
   const todayKey=`today_${getToday()}`;
   const todayCount=data?.[todayKey]||0;
   const wordsToNext=nextLevel?nextLevel.minWords-(data?.totalWords||0):null;
@@ -397,8 +582,8 @@ function App() {
 
       {showLevelUp&&<LevelUpModal level={showLevelUp} accent={c.accent} onClose={()=>setShowLevelUp(null)}/>}
       {showStreak&&(
-        <div style={{position:"fixed",top:"16px",left:"50%",transform:"translateX(-50%)",zIndex:100,background:`${c.accent}ee`,borderRadius:"20px",padding:"10px 24px",display:"flex",alignItems:"center",gap:"8px",animation:"pop 0.3s ease",whiteSpace:"nowrap"}}>
-          <span style={{fontSize:"20px",animation:"flame 1s infinite"}}>🔥</span>
+        <div style={{position:"fixed",top:"16px",left:"50%",transform:"translateX(-50%)",zIndex:100,background:`${c.accent}ee`,borderRadius:"20px",padding:"10px 24px",display:"flex",alignItems:"center",gap:"8px",whiteSpace:"nowrap"}}>
+          <span style={{fontSize:"20px"}}>🔥</span>
           <span style={{fontSize:"15px",fontWeight:"700",color:"#fff"}}>連續 {data?.streak} 天打卡！</span>
         </div>
       )}
@@ -417,8 +602,13 @@ function App() {
               <span style={{margin:"0 4px",color:"#444"}}>·</span>
               累積 <span style={{color:"#c77dff",fontWeight:"700"}}>{data?.totalWords||0}</span>
             </div>
+            {reviewCount>0&&screen!=="review"&&(
+              <button onClick={()=>setScreen("review")} style={{display:"inline-flex",alignItems:"center",gap:"4px",background:"#f5a62322",border:"1px solid #f5a62355",borderRadius:"14px",padding:"4px 10px",fontSize:"12px",color:"#f5a623",cursor:"pointer",fontWeight:"700"}}>
+                🔁 {reviewCount}
+              </button>
+            )}
             <div style={{display:"inline-flex",alignItems:"center",gap:"4px",background:`${c.accent}18`,border:`1px solid ${c.accent}35`,borderRadius:"14px",padding:"4px 10px"}}>
-              <span style={{fontSize:"14px",animation:(data?.streak||0)>0?"flame 1.5s infinite":"none"}}>🔥</span>
+              <span style={{fontSize:"14px"}}>🔥</span>
               <span style={{fontSize:"13px",fontWeight:"700",color:c.accent}}>{data?.streak||0}</span>
             </div>
           </div>
@@ -436,103 +626,94 @@ function App() {
         )}
       </div>
 
-      {/* ── MAIN CONTENT ── */}
-      <div style={{flex:1,overflowY:"auto",padding:"12px 14px 16px",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
-
-        {/* 回顧提示 */}
-        {isInHistory&&(
-          <div style={{textAlign:"center",marginBottom:"10px",padding:"5px",background:`${c.accent}18`,borderRadius:"8px",fontSize:"12px",color:c.accent}}>
-            📖 回顧第 {currentIdx+1} / {history.length} 個
+      {/* ── 複習模式 ── */}
+      {screen==="review"&&(
+        <div style={{flex:1,overflowY:"auto"}}>
+          <div style={{textAlign:"center",padding:"16px 0 4px",fontSize:"14px",color:"#f5a623",fontWeight:"700"}}>
+            🔁 今日複習（{reviews.length} 個）
           </div>
-        )}
+          <ReviewScreen reviews={reviews} accent={c.accent} onDone={handleReviewDone}/>
+        </div>
+      )}
 
-        {/* 載入 */}
-        {!displayWord&&loading&&(
-          <div style={{textAlign:"center",padding:"50px 20px"}}>
-            <div style={{width:"36px",height:"36px",border:`3px solid ${c.accent}33`,borderTop:`3px solid ${c.accent}`,borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/>
-            <div style={{fontSize:"13px",color:"#555"}}>AI 正在準備新單字...</div>
-          </div>
-        )}
-
-        {/* 錯誤 */}
-        {loadError&&!displayWord&&(
-          <div style={{textAlign:"center",padding:"40px 20px"}}>
-            <div style={{fontSize:"44px",marginBottom:"12px"}}>😵</div>
-            <div style={{fontSize:"14px",color:"#e94560",marginBottom:"20px"}}>{loadError}</div>
-            <button onClick={()=>loadMoreWords(data)} style={{background:"#e94560",border:"none",color:"#fff",borderRadius:"12px",padding:"12px 28px",fontSize:"14px",cursor:"pointer",fontWeight:"700"}}>重新載入</button>
-          </div>
-        )}
-
-        {/* 單字卡 */}
-        {displayWord&&(
-          <div key={`${displayWord.word}-${currentIdx}`} style={{animation:isInHistory?"fadeInLeft 0.25s ease":"fadeInRight 0.25s ease"}}>
-
-            {/* Hero 區 */}
-            <div style={{background:c.light,borderRadius:"18px 18px 0 0",padding:"18px 16px 16px",borderTop:`4px solid ${c.accent}`}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
-                {/* 左側：單字資訊 */}
-                <div style={{flex:1,textAlign:"left"}}>
-                  <div style={{fontSize:"10px",letterSpacing:"3px",color:c.accent,textTransform:"uppercase",marginBottom:"4px"}}>{displayWord.partOfSpeech}</div>
-                  <div style={{fontSize:"32px",fontWeight:"700",color:"#fff",marginBottom:"4px",lineHeight:"1.1"}}>{displayWord.word}</div>
-                  <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",marginBottom:"10px"}}>{displayWord.pronunciation}</div>
-                  <div style={{display:"inline-block",background:`${c.accent}22`,border:`1px solid ${c.accent}44`,borderRadius:"8px",padding:"6px 14px",fontSize:"15px",color:c.accent,fontWeight:"600"}}>
-                    {displayWord.chineseMeaning}
+      {/* ── 學習模式 ── */}
+      {screen==="main"&&(
+        <div style={{flex:1,overflowY:"auto",padding:"12px 14px 16px",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
+          {isInHistory&&(
+            <div style={{textAlign:"center",marginBottom:"10px",padding:"5px",background:`${c.accent}18`,borderRadius:"8px",fontSize:"12px",color:c.accent}}>
+              📖 回顧第 {currentIdx+1} / {history.length} 個
+            </div>
+          )}
+          {!displayWord&&loading&&(
+            <div style={{textAlign:"center",padding:"50px 20px"}}>
+              <div style={{width:"36px",height:"36px",border:`3px solid ${c.accent}33`,borderTop:`3px solid ${c.accent}`,borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/>
+              <div style={{fontSize:"13px",color:"#555"}}>AI 正在準備新單字...</div>
+            </div>
+          )}
+          {loadError&&!displayWord&&(
+            <div style={{textAlign:"center",padding:"40px 20px"}}>
+              <div style={{fontSize:"44px",marginBottom:"12px"}}>😵</div>
+              <div style={{fontSize:"14px",color:"#e94560",marginBottom:"20px"}}>{loadError}</div>
+              <button onClick={()=>loadMoreWords(data)} style={{background:"#e94560",border:"none",color:"#fff",borderRadius:"12px",padding:"12px 28px",fontSize:"14px",cursor:"pointer",fontWeight:"700"}}>重新載入</button>
+            </div>
+          )}
+          {displayWord&&(
+            <div key={`${displayWord.word}-${currentIdx}`} style={{animation:isInHistory?"fadeInLeft 0.25s ease":"fadeInRight 0.25s ease"}}>
+              <div style={{background:c.light,borderRadius:"18px 18px 0 0",padding:"18px 16px 16px",borderTop:`4px solid ${c.accent}`}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
+                  <div style={{flex:1,textAlign:"left"}}>
+                    <div style={{fontSize:"10px",letterSpacing:"3px",color:c.accent,textTransform:"uppercase",marginBottom:"4px"}}>{displayWord.partOfSpeech}</div>
+                    <div style={{fontSize:"32px",fontWeight:"700",color:"#fff",marginBottom:"4px",lineHeight:"1.1"}}>{displayWord.word}</div>
+                    <div style={{fontSize:"12px",color:"rgba(255,255,255,0.4)",marginBottom:"10px"}}>{displayWord.pronunciation}</div>
+                    <div style={{display:"inline-block",background:`${c.accent}22`,border:`1px solid ${c.accent}44`,borderRadius:"8px",padding:"6px 14px",fontSize:"15px",color:c.accent,fontWeight:"600"}}>
+                      {displayWord.chineseMeaning}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:"8px",flexShrink:0}}>
+                    <button onClick={handleNext} style={{padding:"12px 14px",background:c.accent,border:"none",color:"#fff",borderRadius:"12px",fontSize:"13px",cursor:"pointer",fontWeight:"700",textAlign:"center",minWidth:"80px",lineHeight:"1.3"}}>
+                      {speechPassed?"✅ 通過！":"學會了"}<br/>下一個 →
+                    </button>
+                    <button onClick={handlePrev} disabled={!canGoPrev} style={{padding:"8px 14px",background:canGoPrev?"rgba(255,255,255,0.1)":"rgba(255,255,255,0.03)",border:`1px solid ${canGoPrev?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.05)"}`,color:canGoPrev?"#ccc":"#444",borderRadius:"12px",fontSize:"12px",cursor:canGoPrev?"pointer":"default",textAlign:"center"}}>
+                      ← 上一個
+                    </button>
                   </div>
                 </div>
-                {/* 右側：下一個按鈕 */}
-                <div style={{display:"flex",flexDirection:"column",gap:"8px",flexShrink:0}}>
-                  <button onClick={handleNext} style={{padding:"12px 14px",background:c.accent,border:"none",color:"#fff",borderRadius:"12px",fontSize:"13px",cursor:"pointer",fontWeight:"700",textAlign:"center",minWidth:"80px",lineHeight:"1.3"}}>
-                    {speechPassed?"✅ 通過！":"學會了"}<br/>下一個 →
-                  </button>
-                  <button onClick={handlePrev} disabled={!canGoPrev} style={{padding:"8px 14px",background:canGoPrev?"rgba(255,255,255,0.1)":"rgba(255,255,255,0.03)",border:`1px solid ${canGoPrev?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.05)"}`,color:canGoPrev?"#ccc":"#444",borderRadius:"12px",fontSize:"12px",cursor:canGoPrev?"pointer":"default",textAlign:"center"}}>
-                    ← 上一個
-                  </button>
+              </div>
+              <div style={{background:c.bg,padding:"14px 16px",borderLeft:`1px solid ${c.accent}22`,borderRight:`1px solid ${c.accent}22`}}>
+                <SpeechPractice word={displayWord.word} accent={c.accent} onPass={()=>setSpeechPassed(true)}/>
+              </div>
+              <div style={{background:c.bg,borderLeft:`1px solid ${c.accent}22`,borderRight:`1px solid ${c.accent}22`,padding:"14px 16px 0"}}>
+                <div style={{marginBottom:"12px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+                    <span style={{fontSize:"10px",letterSpacing:"2px",color:"#555",textTransform:"uppercase"}}>例句 1</span>
+                    <SpeakBtn text={displayWord.example1} label="聽" accent={c.accent} rate={0.82}/>
+                  </div>
+                  <div style={{fontSize:"14px",color:"#e8e4de",lineHeight:"1.7",fontStyle:"italic",marginBottom:"4px"}}>"{displayWord.example1}"</div>
+                  <div style={{fontSize:"12px",color:"#666"}}>{displayWord.example1Translation}</div>
+                </div>
+                <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:"12px",marginBottom:"12px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+                    <span style={{fontSize:"10px",letterSpacing:"2px",color:"#555",textTransform:"uppercase"}}>例句 2</span>
+                    <SpeakBtn text={displayWord.example2} label="聽" accent={c.accent} rate={0.82}/>
+                  </div>
+                  <div style={{fontSize:"14px",color:"#e8e4de",lineHeight:"1.7",fontStyle:"italic",marginBottom:"4px"}}>"{displayWord.example2}"</div>
+                  {revealed
+                    ?<div style={{fontSize:"12px",color:"#666"}}>{displayWord.example2Translation}</div>
+                    :<button onClick={()=>setRevealed(true)} style={{background:"none",border:"1px solid rgba(255,255,255,0.1)",color:"#777",borderRadius:"8px",padding:"4px 12px",fontSize:"12px",cursor:"pointer"}}>顯示翻譯</button>
+                  }
+                </div>
+                <div style={{padding:"12px",background:`${c.accent}11`,borderRadius:"10px",border:`1px solid ${c.accent}22`,marginBottom:"14px"}}>
+                  <div style={{fontSize:"10px",letterSpacing:"2px",color:c.accent,textTransform:"uppercase",marginBottom:"5px"}}>💡 記憶小技巧</div>
+                  <div style={{fontSize:"13px",color:"rgba(255,255,255,0.65)",lineHeight:"1.6"}}>{displayWord.tip}</div>
                 </div>
               </div>
+              <div style={{background:c.bg,borderRadius:"0 0 18px 18px",border:`1px solid ${c.accent}22`,borderTop:"none",height:"16px"}}/>
             </div>
+          )}
+        </div>
+      )}
 
-            {/* 跟讀 */}
-            <div style={{background:c.bg,padding:"14px 16px",borderLeft:`1px solid ${c.accent}22`,borderRight:`1px solid ${c.accent}22`}}>
-              <SpeechPractice word={displayWord.word} accent={c.accent} onPass={()=>setSpeechPassed(true)}/>
-            </div>
-
-            {/* 例句（永遠展開）*/}
-            <div style={{background:c.bg,borderLeft:`1px solid ${c.accent}22`,borderRight:`1px solid ${c.accent}22`,padding:"14px 16px 0"}}>
-              {/* 例句1 */}
-              <div style={{marginBottom:"12px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
-                  <span style={{fontSize:"10px",letterSpacing:"2px",color:"#555",textTransform:"uppercase"}}>例句 1</span>
-                  <SpeakBtn text={displayWord.example1} label="聽" accent={c.accent} rate={0.82}/>
-                </div>
-                <div style={{fontSize:"14px",color:"#e8e4de",lineHeight:"1.7",fontStyle:"italic",marginBottom:"4px"}}>"{displayWord.example1}"</div>
-                <div style={{fontSize:"12px",color:"#666"}}>{displayWord.example1Translation}</div>
-              </div>
-              {/* 例句2 */}
-              <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:"12px",marginBottom:"12px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
-                  <span style={{fontSize:"10px",letterSpacing:"2px",color:"#555",textTransform:"uppercase"}}>例句 2</span>
-                  <SpeakBtn text={displayWord.example2} label="聽" accent={c.accent} rate={0.82}/>
-                </div>
-                <div style={{fontSize:"14px",color:"#e8e4de",lineHeight:"1.7",fontStyle:"italic",marginBottom:"4px"}}>"{displayWord.example2}"</div>
-                {revealed
-                  ?<div style={{fontSize:"12px",color:"#666"}}>{displayWord.example2Translation}</div>
-                  :<button onClick={()=>setRevealed(true)} style={{background:"none",border:"1px solid rgba(255,255,255,0.1)",color:"#777",borderRadius:"8px",padding:"4px 12px",fontSize:"12px",cursor:"pointer"}}>顯示翻譯</button>
-                }
-              </div>
-              {/* 技巧 */}
-              <div style={{padding:"12px",background:`${c.accent}11`,borderRadius:"10px",border:`1px solid ${c.accent}22`,marginBottom:"14px"}}>
-                <div style={{fontSize:"10px",letterSpacing:"2px",color:c.accent,textTransform:"uppercase",marginBottom:"5px"}}>💡 記憶小技巧</div>
-                <div style={{fontSize:"13px",color:"rgba(255,255,255,0.65)",lineHeight:"1.6"}}>{displayWord.tip}</div>
-              </div>
-            </div>
-
-            {/* 底部圓角收邊 */}
-            <div style={{background:c.bg,borderRadius:"0 0 18px 18px",border:`1px solid ${c.accent}22`,borderTop:"none",height:"16px"}}/>
-          </div>
-        )}
-      </div>
-
-      {/* ── 底部設定 ── */}
+      {/* ── 底部 ── */}
       <div style={{padding:"10px 16px",borderTop:`1px solid ${c.accent}15`,textAlign:"center",flexShrink:0}}>
         <button onClick={()=>{if(confirm("重新設定主題？")){const d={...appData};delete d.topic;delete d.savedQueue;saveData(d);setScreen("setup");setHistory([]);setWordQueue([]);setCurrentWord(null);setCurrentIdx(-1);}}} style={{background:"none",border:`1px solid ${c.accent}28`,color:`${c.accent}77`,borderRadius:"16px",padding:"6px 16px",fontSize:"11px",cursor:"pointer"}}>
           ⚙️ 更改主題
