@@ -52,8 +52,8 @@ function getCurrentLevel(w) { return LEVELS.slice().reverse().find(l=>w>=l.minWo
 function getNextLevel(w) { return LEVELS.find(l=>l.minWords>w)||null; }
 function getTopicColor(id) { return TOPICS.find(t=>t.id===id)?.color||TOPICS[0].color; }
 
-async function fetchWords(topic,level,count=8) {
-  const res = await fetch("/api/words",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic,level,count})});
+async function fetchWords(topic,level,count=8,seenWords=[]) {
+  const res = await fetch("/api/words",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic,level,count,seenWords})});
   const data = await res.json();
   if(!data.words) throw new Error(data.error||"No words");
   return data.words;
@@ -307,7 +307,9 @@ function App() {
     loadingRef.current=true; setLoading(true); setLoadError(null);
     try{
       const level=getCurrentLevel(data.totalWords||0);
-      const words=await fetchWords(data.topic,level.id,8);
+      // 取得已看過的單字清單（避免重複）
+      const seenWords=(data.seenWords||[]).slice(-50); // 最多傳最近50個
+      const words=await fetchWords(data.topic,level.id,8,seenWords);
       setWordQueue(prev=>[...prev,...words]);
       setCurrentWord(prev=>{
         if(!prev&&words.length>0){
@@ -337,7 +339,9 @@ function App() {
     const oldLevel=getCurrentLevel(data.totalWords||0);
     const newLevel=getCurrentLevel(newTotal);
     const leveledUp=newLevel.id!==oldLevel.id;
-    const updated={...data,totalWords:newTotal,[todayKey]:newTodayCount};
+    // 記錄已看過的單字（避免重複）
+    const newSeenWords=[...(data.seenWords||[]),currentWord?.word].filter(Boolean);
+    const updated={...data,totalWords:newTotal,[todayKey]:newTodayCount,seenWords:newSeenWords.slice(-100)};
     setAppData(updated);
     if(currentWord) setHistory(prev=>[...prev,currentWord]);
     setShowEx(false);setRevealed(false);setSpeechPassed(false);
