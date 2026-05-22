@@ -433,14 +433,26 @@ function ConversationScreen({appData, accent}) {
       const text = data.content?.[0]?.text || "";
       const clean = text.replace(/```json|```/g,"").trim();
       const parsed = JSON.parse(clean);
+      // 翻譯 opening
+      let openingCn = "";
+      try {
+        const tr = await fetch("https://api.anthropic.com/v1/messages", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:100,
+            messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${parsed.opening}`}]})
+        });
+        const td = await tr.json();
+        openingCn = td.content?.[0]?.text || "";
+      } catch(e) {}
       setScenario(parsed);
-      setTurns([{role:"ai", text: parsed.opening}]);
+      setTurns([{role:"ai", text: parsed.opening, cn: openingCn}]);
       speakText(parsed.opening);
       setPhase("talking");
     } catch(e) {
-      setScenario({scenario:"朋友邀你週末爬山，但你已有計劃。", task:"用英文婉拒並提議改期。", opening:"Hey! Are you free this weekend? I was thinking we could go hiking!", targetWords:[]});
-      setTurns([{role:"ai", text:"Hey! Are you free this weekend? I was thinking we could go hiking!"}]);
-      speakText("Hey! Are you free this weekend? I was thinking we could go hiking!");
+      const fallbackOpening = "Hey! Are you free this weekend? I was thinking we could go hiking!";
+      setScenario({scenario:"朋友邀你週末爬山，但你已有計劃。", task:"用英文婉拒並提議改期。", opening:fallbackOpening, targetWords:[]});
+      setTurns([{role:"ai", text:fallbackOpening, cn:"嘿！你這週末有空嗎？我在想我們可以去爬山！"}]);
+      speakText(fallbackOpening);
       setPhase("talking");
     }
   }
@@ -479,7 +491,18 @@ function ConversationScreen({appData, accent}) {
   }
 
   async function handleUserSay(userText) {
-    const newTurns = [...turns, {role:"user", text:userText}];
+    // 翻譯用戶說的話
+    let userCn = "";
+    try {
+      const tr = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:100,
+          messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${userText}`}]})
+      });
+      const td = await tr.json();
+      userCn = td.content?.[0]?.text || "";
+    } catch(e) {}
+    const newTurns = [...turns, {role:"user", text:userText, cn:userCn}];
     setTurns(newTurns);
     const newCount = turnCount + 1;
     setTurnCount(newCount);
@@ -501,10 +524,21 @@ function ConversationScreen({appData, accent}) {
       });
       const data = await res.json();
       const aiText = data.content?.[0]?.text || "I see! Tell me more.";
-      setTurns(prev=>[...prev,{role:"ai",text:aiText}]);
+      // 翻譯 AI 回應
+      let aiCn = "";
+      try {
+        const tr = await fetch("https://api.anthropic.com/v1/messages", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:100,
+            messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${aiText}`}]})
+        });
+        const td = await tr.json();
+        aiCn = td.content?.[0]?.text || "";
+      } catch(e) {}
+      setTurns(prev=>[...prev,{role:"ai",text:aiText,cn:aiCn}]);
       speakText(aiText);
     } catch(e) {
-      setTurns(prev=>[...prev,{role:"ai",text:"That's interesting! Go on."}]);
+      setTurns(prev=>[...prev,{role:"ai",text:"That's interesting! Go on.",cn:"有意思！繼續說。"}]);
     }
     setAiThinking(false);
   }
@@ -602,13 +636,19 @@ function ConversationScreen({appData, accent}) {
       {/* 對話區 */}
       <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"10px"}}>
         {turns.map((t,i)=>(
-          <div key={i} style={{display:"flex",justifyContent:t.role==="user"?"flex-end":"flex-start"}}>
-            <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:t.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:t.role==="user"?accent:"rgba(255,255,255,0.08)",fontSize:"14px",color:"#fff",lineHeight:"1.6"}}>
+          <div key={i} style={{display:"flex",justifyContent:t.role==="user"?"flex-end":"flex-start",flexDirection:"column",alignItems:t.role==="user"?"flex-end":"flex-start",gap:"3px"}}>
+            <div style={{maxWidth:"82%",padding:"10px 14px",borderRadius:t.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:t.role==="user"?accent:"rgba(255,255,255,0.08)",fontSize:"14px",color:"#fff",lineHeight:"1.6"}}>
               {t.text}
               {t.role==="ai"&&(
                 <button onClick={()=>speakText(t.text)} style={{display:"block",marginTop:"4px",background:"none",border:"none",color:`${accent}99`,fontSize:"11px",cursor:"pointer",padding:0}}>🔊 重聽</button>
               )}
             </div>
+            {/* 中文翻譯 */}
+            {t.cn&&(
+              <div style={{maxWidth:"82%",fontSize:"11px",color:"#666",padding:"0 4px",lineHeight:"1.5",textAlign:t.role==="user"?"right":"left"}}>
+                {t.cn}
+              </div>
+            )}
           </div>
         ))}
         {aiThinking&&(
