@@ -26,26 +26,22 @@ button { font-family: inherit; }
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel">
 const { useState, useRef, useEffect, useCallback } = React;
-
 // ── Supabase ──
 const SUPABASE_URL = "https://urayzkbkzrdrvsdrsmiu.supabase.co";
 const SUPABASE_KEY = "sb_publishable_wzs-IyQONvOXTpwKq46kPw_x6Kww_4r";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
 function getUserId() {
   let id = localStorage.getItem("daily_english_uid");
   if (!id) { id = "user_" + Math.random().toString(36).slice(2, 10); localStorage.setItem("daily_english_uid", id); }
   return id;
 }
 const USER_ID = getUserId();
-
-// ── SM-2 間隔重複演算法 ──
+// ── SM-2 ──
 function calcNextReview(reviewCount, easeFactor, quality) {
-  // quality: 0=完全錯, 1=有點對, 2=全對
   let newEase = easeFactor + (0.1 - (2 - quality) * (0.08 + (2 - quality) * 0.02));
   newEase = Math.max(1.3, newEase);
   let interval;
-  if (quality === 0) { interval = 1; } // 答錯：明天再來
+  if (quality === 0) { interval = 1; }
   else if (reviewCount === 0) { interval = 1; }
   else if (reviewCount === 1) { interval = 3; }
   else { interval = Math.round((reviewCount) * newEase); }
@@ -53,8 +49,6 @@ function calcNextReview(reviewCount, easeFactor, quality) {
   next.setDate(next.getDate() + interval);
   return { nextReview: next.toISOString().split("T")[0], newEase, interval };
 }
-
-// 寫入學習記錄
 async function saveWordToReview(word, chineseMeaning, partOfSpeech) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -72,8 +66,6 @@ async function saveWordToReview(word, chineseMeaning, partOfSpeech) {
     ease_factor: 2.5,
   });
 }
-
-// 載入今日複習（上限15個）
 async function loadTodayReviews() {
   const today = new Date().toISOString().split("T")[0];
   const { data, error } = await sb
@@ -86,8 +78,6 @@ async function loadTodayReviews() {
   if (error) return [];
   return data || [];
 }
-
-// 更新複習結果
 async function updateReview(id, reviewCount, easeFactor, quality) {
   const { nextReview, newEase } = calcNextReview(reviewCount, easeFactor, quality);
   await sb.from("user_progress").update({
@@ -96,7 +86,6 @@ async function updateReview(id, reviewCount, easeFactor, quality) {
     ease_factor: newEase,
   }).eq("id", id);
 }
-
 // ── 常數 ──
 const TOPICS = [
   { id:"daily",    label:"日常生活", emoji:"🏠", desc:"吃飯、購物、交通、家居",   color:{bg:"#0d1b2a",accent:"#4a9eda",light:"#112233"} },
@@ -108,14 +97,12 @@ const TOPICS = [
   { id:"health",   label:"健康生活", emoji:"💪", desc:"運動、飲食、身體狀況",       color:{bg:"#0a2010",accent:"#40c070",light:"#0e2e16"} },
   { id:"shopping", label:"購物消費", emoji:"🛍️", desc:"砍價、比較、付款",           color:{bg:"#280a20",accent:"#e06090",light:"#361230"} },
 ];
-
 const LEVELS = [
   { id:"beginner",     label:"初學者", emoji:"🌱", minWords:0,    desc:"超基礎日常單字" },
   { id:"elementary",   label:"初級",   emoji:"🌿", minWords:300,  desc:"常用片語" },
   { id:"intermediate", label:"中級",   emoji:"🌳", minWords:500,  desc:"口語表達" },
   { id:"advanced",     label:"高級",   emoji:"🏆", minWords:1000, desc:"地道慣用語" },
 ];
-
 const STORAGE_KEY = "daily_english_v5";
 function loadData() { try { const r=localStorage.getItem(STORAGE_KEY); if(r) return JSON.parse(r); } catch(e){} return null; }
 function saveData(d) { try { localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); } catch(e){} }
@@ -123,14 +110,12 @@ function getToday() { return new Date().toISOString().slice(0,10); }
 function getCurrentLevel(w) { return LEVELS.slice().reverse().find(l=>w>=l.minWords)||LEVELS[0]; }
 function getNextLevel(w) { return LEVELS.find(l=>l.minWords>w)||null; }
 function getTopicColor(id) { return TOPICS.find(t=>t.id===id)?.color||TOPICS[0].color; }
-
 async function fetchWords(topic,level,count=8,seenWords=[]) {
   const res = await fetch("/api/words",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic,level,count,seenWords})});
   const data = await res.json();
   if(!data.words) throw new Error(data.error||"No words");
   return data.words;
 }
-
 function strictMatch(heard,target) {
   const norm=s=>s.toLowerCase().replace(/[^a-z\s]/g,"").trim();
   const h=norm(heard),t=norm(target);
@@ -143,7 +128,6 @@ function strictMatch(heard,target) {
   for(let i=0;i<s.length;i++) if(s[i]!==l[i]) diff++;
   return (diff+l.length-s.length)<=1;
 }
-
 function playVictorySound() {
   try {
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
@@ -166,8 +150,6 @@ function playVictorySound() {
     });
   } catch(e){}
 }
-
-// ── 發音按鈕 ──
 function SpeakBtn({text,label,accent,rate}) {
   const [playing,setPlaying]=useState(false);
   function speak() {
@@ -187,14 +169,11 @@ function SpeakBtn({text,label,accent,rate}) {
     </button>
   );
 }
-
-// ── 跟讀練習 ──
 function SpeechPractice({word,accent,onPass}) {
   const [status,setStatus]=useState("idle");
   const [heard,setHeard]=useState("");
   const [errorMsg,setErrorMsg]=useState("");
   const recRef=useRef(null); const gotRef=useRef(false);
-
   function startListen() {
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR){setStatus("unsupported");return;}
@@ -222,13 +201,11 @@ function SpeechPractice({word,accent,onPass}) {
     try{rec.start();}catch(e){setErrorMsg("無法啟動麥克風");setStatus("error");}
   }
   function reset(){setStatus("idle");setHeard("");setErrorMsg("");gotRef.current=false;}
-
   if(status==="unsupported") return(
     <div style={{padding:"10px",background:"rgba(255,100,100,0.08)",borderRadius:"10px",fontSize:"12px",color:"#f5a623",textAlign:"center"}}>
       ⚠️ 請用 <strong>Chrome</strong> 才能使用跟讀功能
     </div>
   );
-
   return(
     <div style={{padding:"14px",background:"rgba(255,255,255,0.04)",borderRadius:"14px"}}>
       <div style={{fontSize:"11px",letterSpacing:"2px",color:accent,textTransform:"uppercase",marginBottom:"8px"}}>🎤 跟讀練習</div>
@@ -276,20 +253,16 @@ function SpeechPractice({word,accent,onPass}) {
     </div>
   );
 }
-
-// ── 複習模式（聽音辨義版）──
 function ReviewScreen({reviews, accent, onDone}) {
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState(null);
   const [correct, setCorrect] = useState(0);
   const [done, setDone] = useState(false);
-
   useEffect(() => {
     if (!reviews || reviews.length === 0) return;
     const timer = setTimeout(() => playWord(reviews[idx]?.content), 500);
     return () => clearTimeout(timer);
   }, [idx, reviews]);
-
   function playWord(word) {
     if (!word || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
@@ -300,7 +273,6 @@ function ReviewScreen({reviews, accent, onDone}) {
     if(v) u.voice=v;
     window.speechSynthesis.speak(u);
   }
-
   if (!reviews || reviews.length === 0) {
     return (
       <div style={{textAlign:"center",padding:"60px 20px"}}>
@@ -311,7 +283,6 @@ function ReviewScreen({reviews, accent, onDone}) {
       </div>
     );
   }
-
   if (done) {
     return (
       <div style={{textAlign:"center",padding:"60px 20px"}}>
@@ -323,7 +294,6 @@ function ReviewScreen({reviews, accent, onDone}) {
       </div>
     );
   }
-
   const current = reviews[idx];
   const otherReviews = reviews.filter((_,i)=>i!==idx);
   const pool = [...otherReviews].sort(()=>Math.random()-0.5).slice(0,2);
@@ -332,7 +302,6 @@ function ReviewScreen({reviews, accent, onDone}) {
     ...pool.slice(0,2).map(p=>({word:p.content,cn:p.translation})),
     {word:current.content, cn:current.translation}
   ].sort(()=>Math.random()-0.5);
-
   async function handleSelect(opt) {
     if (selected !== null) return;
     setSelected(opt);
@@ -340,16 +309,13 @@ function ReviewScreen({reviews, accent, onDone}) {
     if (isCorrect) { setCorrect(c=>c+1); playVictorySound(); }
     await updateReview(current.id, current.review_count, current.ease_factor, isCorrect?2:0);
   }
-
   function next() {
     if (idx + 1 >= reviews.length) { setDone(true); return; }
     setIdx(i=>i+1); setSelected(null);
   }
-
   const { nextReview: previewNext } = selected
     ? calcNextReview(current.review_count, current.ease_factor, selected.word===current.content?2:0)
     : { nextReview: "" };
-
   return (
     <div style={{maxWidth:"460px",margin:"0 auto",padding:"16px 14px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}}>
@@ -359,8 +325,6 @@ function ReviewScreen({reviews, accent, onDone}) {
       <div style={{height:"3px",background:"rgba(255,255,255,0.07)",borderRadius:"3px",marginBottom:"20px",overflow:"hidden"}}>
         <div style={{height:"100%",background:accent,borderRadius:"3px",width:`${(idx/reviews.length)*100}%`,transition:"width 0.3s ease"}}/>
       </div>
-
-      {/* 聽音區 */}
       <div style={{background:"rgba(255,255,255,0.05)",borderRadius:"16px",padding:"32px 20px",textAlign:"center",marginBottom:"20px",border:`1px solid ${accent}33`}}>
         <div style={{fontSize:"11px",letterSpacing:"2px",color:accent,textTransform:"uppercase",marginBottom:"16px",fontFamily:"monospace"}}>
           👂 聽發音，選出正確的中文意思
@@ -375,8 +339,6 @@ function ReviewScreen({reviews, accent, onDone}) {
           </div>
         )}
       </div>
-
-      {/* 選項（中文）*/}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"16px"}}>
         {options.map((opt,i)=>{
           let bg="rgba(255,255,255,0.06)",border="1px solid rgba(255,255,255,0.1)",color="#ccc";
@@ -391,7 +353,6 @@ function ReviewScreen({reviews, accent, onDone}) {
           );
         })}
       </div>
-      {/* 結果 */}
       {selected && (
         <>
           <div style={{padding:"12px",background:"rgba(255,255,255,0.04)",borderRadius:"10px",fontSize:"12px",color:"#888",textAlign:"center",marginBottom:"12px"}}>
@@ -408,8 +369,6 @@ function ReviewScreen({reviews, accent, onDone}) {
     </div>
   );
 }
-
-// ── 設定畫面 ──
 function SetupScreen({onComplete}) {
   const [topic,setTopic]=useState(null);
   return(
@@ -435,8 +394,254 @@ function SetupScreen({onComplete}) {
     </div>
   );
 }
+// ── 對話模組 ──
+function ConversationScreen({appData, accent}) {
+  const [phase, setPhase] = useState("intro"); // intro | talking | feedback
+  const [scenario, setScenario] = useState(null);
+  const [turns, setTurns] = useState([]); // [{role:"user"|"ai", text, isVoice}]
+  const [turnCount, setTurnCount] = useState(0);
+  const [listening, setListening] = useState(false);
+  const [aiThinking, setAiThinking] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [listenError, setListenError] = useState("");
+  const recRef = useRef(null);
+  const gotRef = useRef(false);
+  const bottomRef = useRef(null);
+  const MAX_TURNS = 5;
 
-// ── Level Up Modal ──
+  useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [turns, aiThinking]);
+
+  // 生成場景
+  async function generateScenario() {
+    setPhase("loading");
+    const totalWords = appData?.totalWords || 0;
+    const level = totalWords < 300 ? "beginner" : totalWords < 500 ? "elementary" : "intermediate";
+    const useWordBound = Math.random() > 0.5;
+    const recentWords = appData?.seenWords?.slice(-5)?.join(", ") || "";
+    const prompt = useWordBound && recentWords
+      ? `你是英文對話練習夥伴。根據這些最近學的單字：${recentWords}，設計一個真實生活對話場景任務給程度${level}的台灣學習者。
+用JSON回答，格式：{"scenario":"場景描述（中文，2句話）","task":"你的任務（中文，1句話）","opening":"你的開場白（英文，1-2句，友善自然）","targetWords":["${recentWords.split(",")[0]?.trim()}"]}`
+      : `你是英文對話練習夥伴。為程度${level}的台灣學習者設計一個真實生活對話場景任務（朋友聚會/工作/旅遊/日常）。
+用JSON回答，格式：{"scenario":"場景描述（中文，2句話）","task":"你的任務（中文，1句話）","opening":"你的開場白（英文，1-2句，友善自然）","targetWords":[]}`;
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:400,
+          messages:[{role:"user",content:prompt}]})
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "";
+      const clean = text.replace(/```json|```/g,"").trim();
+      const parsed = JSON.parse(clean);
+      setScenario(parsed);
+      setTurns([{role:"ai", text: parsed.opening}]);
+      speakText(parsed.opening);
+      setPhase("talking");
+    } catch(e) {
+      setScenario({scenario:"朋友邀你週末爬山，但你已有計劃。", task:"用英文婉拒並提議改期。", opening:"Hey! Are you free this weekend? I was thinking we could go hiking!", targetWords:[]});
+      setTurns([{role:"ai", text:"Hey! Are you free this weekend? I was thinking we could go hiking!"}]);
+      speakText("Hey! Are you free this weekend? I was thinking we could go hiking!");
+      setPhase("talking");
+    }
+  }
+
+  function speakText(text) {
+    if(!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang="en-US"; u.rate=0.88;
+    const voices = window.speechSynthesis.getVoices();
+    const v = voices.find(v=>v.lang==="en-US")||voices.find(v=>v.lang.startsWith("en"));
+    if(v) u.voice=v;
+    window.speechSynthesis.speak(u);
+  }
+
+  function startListening() {
+    const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){setListenError("請用Chrome瀏覽器");return;}
+    if(recRef.current){try{recRef.current.abort();}catch(e){}}
+    setListening(true); setListenError(""); gotRef.current=false;
+    const rec = new SR(); recRef.current=rec;
+    rec.lang="en-US"; rec.interimResults=false; rec.maxAlternatives=3;
+    rec.onresult=(e)=>{
+      gotRef.current=true;
+      const text = e.results[0][0].transcript;
+      setListening(false);
+      handleUserSay(text);
+    };
+    rec.onerror=(e)=>{
+      gotRef.current=true; setListening(false);
+      if(e.error==="not-allowed") setListenError("請允許麥克風");
+      else setListenError("沒聽到，請再試");
+    };
+    rec.onend=()=>{ if(!gotRef.current){setListening(false);setListenError("沒收到語音，請靠近麥克風");} };
+    try{rec.start();}catch(e){setListening(false);setListenError("無法啟動麥克風");}
+  }
+
+  async function handleUserSay(userText) {
+    const newTurns = [...turns, {role:"user", text:userText}];
+    setTurns(newTurns);
+    const newCount = turnCount + 1;
+    setTurnCount(newCount);
+    if(newCount >= MAX_TURNS) {
+      await generateFeedback(newTurns);
+      return;
+    }
+    setAiThinking(true);
+    try {
+      const history = newTurns.map(t=>({role:t.role==="ai"?"assistant":"user", content:t.text}));
+      const sysPrompt = `你是英文對話練習夥伴。場景：${scenario?.scenario} 任務：${scenario?.task}
+用自然的口語英文回應，1-3句話，根據對方說的內容自然推進對話。
+第${newCount}輪（共${MAX_TURNS}輪），快到最後時自然收尾。
+只說英文，不加解釋。`;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:200,
+          system: sysPrompt, messages:history})
+      });
+      const data = await res.json();
+      const aiText = data.content?.[0]?.text || "I see! Tell me more.";
+      setTurns(prev=>[...prev,{role:"ai",text:aiText}]);
+      speakText(aiText);
+    } catch(e) {
+      setTurns(prev=>[...prev,{role:"ai",text:"That's interesting! Go on."}]);
+    }
+    setAiThinking(false);
+  }
+
+  async function generateFeedback(allTurns) {
+    setPhase("feedback_loading");
+    const userLines = allTurns.filter(t=>t.role==="user").map(t=>t.text).join("\n");
+    const prompt = `你是專業英文教練。分析這個台灣學習者的英文對話：
+場景：${scenario?.scenario}
+對話內容：${userLines}
+目標單字：${scenario?.targetWords?.join(", ")||"無"}
+
+用繁體中文給出簡潔回饋，嚴格用以下JSON格式：
+{"score":"A/B/C/D","mostUnnatural":"最不自然的一句（英文原句）+ 一句話說為什麼","wordsUsed":"用對的詞x個，用錯或漏掉的詞","nativeVersion":"如果是native speaker，剛才最關鍵的那一句會怎麼說（英文示範）"}`;
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:400,
+          messages:[{role:"user",content:prompt}]})
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text||"";
+      const clean = text.replace(/```json|```/g,"").trim();
+      const parsed = JSON.parse(clean);
+      setFeedback(parsed);
+    } catch(e) {
+      setFeedback({score:"B",mostUnnatural:"分析失敗，請再試一次。",wordsUsed:"—",nativeVersion:"—"});
+    }
+    setPhase("feedback");
+  }
+
+  function reset() {
+    setPhase("intro"); setScenario(null); setTurns([]);
+    setTurnCount(0); setFeedback(null); setListenError("");
+  }
+
+  const scoreColor = {"A":"#52b788","B":"#4a9eda","C":"#f5a623","D":"#e94560"};
+
+  // ── 介面 ──
+  if(phase==="intro") return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 20px",textAlign:"center"}}>
+      <div style={{fontSize:"52px",marginBottom:"16px"}}>💬</div>
+      <div style={{fontSize:"20px",fontWeight:"700",color:"#fff",marginBottom:"8px"}}>對話練習</div>
+      <div style={{fontSize:"13px",color:"#666",marginBottom:"8px",lineHeight:"1.7"}}>5輪情境對話，用說的練英文<br/>結束後得到個人化學習回饋</div>
+      <div style={{fontSize:"12px",color:"#555",marginBottom:"28px"}}>每次約 5 分鐘</div>
+      <button onClick={generateScenario} style={{background:accent,border:"none",color:"#fff",borderRadius:"16px",padding:"14px 36px",fontSize:"16px",cursor:"pointer",fontWeight:"700"}}>
+        開始對話 🎙️
+      </button>
+    </div>
+  );
+
+  if(phase==="loading"||phase==="feedback_loading") return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"12px"}}>
+      <div style={{width:"36px",height:"36px",border:`3px solid ${accent}33`,borderTop:`3px solid ${accent}`,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+      <div style={{fontSize:"13px",color:"#555"}}>{phase==="loading"?"AI 正在準備場景...":"分析你的對話中..."}</div>
+    </div>
+  );
+
+  if(phase==="feedback") return (
+    <div style={{flex:1,overflowY:"auto",padding:"16px 14px",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
+      <div style={{textAlign:"center",marginBottom:"20px"}}>
+        <div style={{fontSize:"48px",marginBottom:"8px"}}>{feedback?.score==="A"?"🔥":feedback?.score==="B"?"💪":feedback?.score==="C"?"📈":"💡"}</div>
+        <div style={{fontSize:"36px",fontWeight:"700",color:scoreColor[feedback?.score]||accent}}>{feedback?.score}</div>
+        <div style={{fontSize:"12px",color:"#555",marginTop:"4px"}}>本次對話評分</div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"20px"}}>
+        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"14px",padding:"14px"}}>
+          <div style={{fontSize:"10px",letterSpacing:"2px",color:"#e94560",textTransform:"uppercase",marginBottom:"6px"}}>⚠️ 最不自然的地方</div>
+          <div style={{fontSize:"13px",color:"#ddd",lineHeight:"1.6"}}>{feedback?.mostUnnatural}</div>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"14px",padding:"14px"}}>
+          <div style={{fontSize:"10px",letterSpacing:"2px",color:"#4a9eda",textTransform:"uppercase",marginBottom:"6px"}}>📊 單字使用</div>
+          <div style={{fontSize:"13px",color:"#ddd",lineHeight:"1.6"}}>{feedback?.wordsUsed}</div>
+        </div>
+        <div style={{background:`${accent}11`,border:`1px solid ${accent}33`,borderRadius:"14px",padding:"14px"}}>
+          <div style={{fontSize:"10px",letterSpacing:"2px",color:accent,textTransform:"uppercase",marginBottom:"6px"}}>✨ Native 會這樣說</div>
+          <div style={{fontSize:"14px",color:"#fff",lineHeight:"1.6",fontStyle:"italic"}}>{feedback?.nativeVersion}</div>
+          <button onClick={()=>{const u=new SpeechSynthesisUtterance(feedback?.nativeVersion||"");u.lang="en-US";u.rate=0.85;window.speechSynthesis.speak(u);}} style={{marginTop:"8px",background:`${accent}22`,border:`1px solid ${accent}44`,color:accent,borderRadius:"12px",padding:"5px 14px",fontSize:"12px",cursor:"pointer"}}>🔊 聽示範</button>
+        </div>
+      </div>
+      <button onClick={reset} style={{width:"100%",background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"13px",fontSize:"15px",cursor:"pointer",fontWeight:"700"}}>
+        再練一次 🔄
+      </button>
+    </div>
+  );
+
+  // talking phase
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
+      {/* 場景說明 */}
+      <div style={{padding:"10px 14px",background:`${accent}11`,borderBottom:`1px solid ${accent}22`,flexShrink:0}}>
+        <div style={{fontSize:"11px",color:accent,marginBottom:"2px"}}>📍 場景 · {turnCount}/{MAX_TURNS} 輪</div>
+        <div style={{fontSize:"12px",color:"#aaa",lineHeight:"1.5"}}>{scenario?.task}</div>
+      </div>
+      {/* 對話區 */}
+      <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"10px"}}>
+        {turns.map((t,i)=>(
+          <div key={i} style={{display:"flex",justifyContent:t.role==="user"?"flex-end":"flex-start"}}>
+            <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:t.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:t.role==="user"?accent:"rgba(255,255,255,0.08)",fontSize:"14px",color:"#fff",lineHeight:"1.6"}}>
+              {t.text}
+              {t.role==="ai"&&(
+                <button onClick={()=>speakText(t.text)} style={{display:"block",marginTop:"4px",background:"none",border:"none",color:`${accent}99`,fontSize:"11px",cursor:"pointer",padding:0}}>🔊 重聽</button>
+              )}
+            </div>
+          </div>
+        ))}
+        {aiThinking&&(
+          <div style={{display:"flex",gap:"5px",padding:"10px 14px"}}>
+            {[0,1,2].map(j=>(
+              <div key={j} style={{width:"7px",height:"7px",borderRadius:"50%",background:accent,animation:"pulse 1.2s infinite",animationDelay:`${j*0.2}s`}}/>
+            ))}
+          </div>
+        )}
+        <div ref={bottomRef}/>
+      </div>
+      {/* 輸入區 */}
+      <div style={{padding:"12px 14px",borderTop:`1px solid ${accent}22`,flexShrink:0}}>
+        {listenError&&<div style={{fontSize:"12px",color:"#f5a623",marginBottom:"8px",textAlign:"center"}}>{listenError}</div>}
+        {!listening&&!aiThinking&&(
+          <button onClick={startListening} style={{width:"100%",background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"14px",fontSize:"15px",cursor:"pointer",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
+            🎙️ 說話
+          </button>
+        )}
+        {listening&&(
+          <div style={{textAlign:"center",padding:"14px"}}>
+            <div style={{fontSize:"28px",marginBottom:"4px"}}>🔴</div>
+            <div style={{fontSize:"13px",color:"#f5a623"}}>聆聽中，說完會自動停止...</div>
+            <button onClick={()=>{if(recRef.current)recRef.current.abort();setListening(false);}} style={{marginTop:"8px",background:"none",border:"1px solid #555",color:"#777",borderRadius:"10px",padding:"4px 14px",fontSize:"12px",cursor:"pointer"}}>取消</button>
+          </div>
+        )}
+        {aiThinking&&(
+          <div style={{textAlign:"center",padding:"14px",fontSize:"13px",color:"#555"}}>AI 回應中...</div>
+        )}
+      </div>
+    </div>
+  );
+}
 function LevelUpModal({level,accent,onClose}) {
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
@@ -450,11 +655,10 @@ function LevelUpModal({level,accent,onClose}) {
     </div>
   );
 }
-
 // ── 主 App ──
 function App() {
   const [appData,setAppData]=useState(null);
-  const [screen,setScreen]=useState("init"); // init | setup | review | main
+  const [screen,setScreen]=useState("init");
   const [history,setHistory]=useState([]);
   const [wordQueue,setWordQueue]=useState([]);
   const [currentIdx,setCurrentIdx]=useState(-1);
@@ -467,7 +671,13 @@ function App() {
   const [showLevelUp,setShowLevelUp]=useState(null);
   const [reviews,setReviews]=useState([]);
   const [reviewCount,setReviewCount]=useState(0);
+  const [activeTab,setActiveTab]=useState("learn"); // learn | chat
   const loadingRef=useRef(false);
+
+  // ── 🔑 KEY FIX: appDataRef 始終指向最新的 appData ──
+  // 避免 handleNext 閉包讀到舊的 state 值
+  const appDataRef = useRef(null);
+  useEffect(() => { appDataRef.current = appData; }, [appData]);
 
   const isInHistory=currentIdx>=0;
   const displayWord=isInHistory?history[currentIdx]:currentWord;
@@ -477,6 +687,7 @@ function App() {
       const data=loadData();
       if(!data||!data.topic){setScreen("setup");return;}
       setAppData(data);
+      appDataRef.current = data;
       const today=getToday();
       let updated=data;
       if(data.lastCheckin!==today){
@@ -484,10 +695,11 @@ function App() {
         const yStr=yesterday.toISOString().slice(0,10);
         const newStreak=data.lastCheckin===yStr?(data.streak||0)+1:1;
         updated={...data,lastCheckin:today,streak:newStreak};
-        setAppData(updated); saveData(updated);
+        setAppData(updated);
+        appDataRef.current = updated;
+        saveData(updated);
         if(newStreak>(data.streak||0)){setShowStreak(true);setTimeout(()=>setShowStreak(false),2500);}
       }
-      // 載入今日複習
       const todayReviews = await loadTodayReviews();
       setReviews(todayReviews);
       setReviewCount(todayReviews.length);
@@ -521,7 +733,8 @@ function App() {
       setWordQueue(prev=>[...prev,...words]);
       setCurrentWord(prev=>{
         if(!prev&&words.length>0){
-          saveData({...data,savedQueue:words});
+          const latest = appDataRef.current || data;
+          saveData({...latest,savedQueue:words});
           setWordQueue(words.slice(1));
           return words[0];
         }
@@ -539,31 +752,54 @@ function App() {
       setRevealed(false);setSpeechPassed(false);
       return;
     }
-    const data=appData;
+
+    // ── 🔑 KEY FIX: 永遠從 appDataRef 讀最新值，不用閉包裡的 appData ──
+    const data = appDataRef.current;
+    if (!data) return;
+
     const today=getToday();
     const todayKey=`today_${today}`;
+
+    // 🔑 KEY FIX: 從 localStorage 再讀一次確保最新累積數，防止 state 延遲
+    const freshFromStorage = loadData();
+    const baseTotalWords = freshFromStorage?.totalWords ?? data.totalWords ?? 0;
+
     const newTodayCount=(data[todayKey]||0)+1;
-    const newTotal=(data.totalWords||0)+1;
-    const oldLevel=getCurrentLevel(data.totalWords||0);
+    const newTotal = baseTotalWords + 1;
+
+    const oldLevel=getCurrentLevel(baseTotalWords);
     const newLevel=getCurrentLevel(newTotal);
     const leveledUp=newLevel.id!==oldLevel.id;
     const newSeenWords=[...(data.seenWords||[]),currentWord?.word].filter(Boolean);
-    const updated={...data,totalWords:newTotal,[todayKey]:newTodayCount,seenWords:newSeenWords.slice(-100)};
+
+    const updated={
+      ...data,
+      totalWords: newTotal,
+      [todayKey]: newTodayCount,
+      seenWords: newSeenWords.slice(-100)
+    };
+
+    // 🔑 立即同步寫入 storage 和 ref，不等 React re-render
+    appDataRef.current = updated;
     setAppData(updated);
-    // 寫入 Supabase 複習排程
+    saveData(updated);  // ← 每次都寫入，保證不丟失
+
     if(currentWord) {
       await saveWordToReview(currentWord.word, currentWord.chineseMeaning, currentWord.partOfSpeech);
       setHistory(prev=>[...prev,currentWord]);
     }
     setRevealed(false);setSpeechPassed(false);
     if(leveledUp) setShowLevelUp(newLevel);
+
     if(wordQueue.length>0){
       const nextWord=wordQueue[0]; const newQueue=wordQueue.slice(1);
       setCurrentWord(nextWord); setWordQueue(newQueue);
       saveData({...updated,savedQueue:[nextWord,...newQueue]});
+      appDataRef.current = {...updated,savedQueue:[nextWord,...newQueue]};
     } else {
       setCurrentWord(null);
       saveData({...updated,savedQueue:[]});
+      appDataRef.current = {...updated,savedQueue:[]};
       loadMoreWords(updated);
     }
     if(wordQueue.length<=3) loadMoreWords(updated);
@@ -578,16 +814,20 @@ function App() {
 
   function handleSetup(topic) {
     const newData={topic,totalWords:0,streak:0,lastCheckin:getToday(),createdAt:getToday()};
-    setAppData(newData); saveData(newData); setScreen("main"); loadMoreWords(newData);
+    setAppData(newData);
+    appDataRef.current = newData;
+    saveData(newData);
+    setScreen("main");
+    loadMoreWords(newData);
   }
 
   function handleReviewDone() {
     setReviews([]); setScreen("main");
-    if(appData) startLearning(appData);
+    const latest = appDataRef.current;
+    if(latest) startLearning(latest);
   }
 
   if(screen==="setup") return <SetupScreen onComplete={handleSetup}/>;
-
   const data=appData;
   const c=getTopicColor(data?.topic);
   const currentLevel=getCurrentLevel(data?.totalWords||0);
@@ -597,7 +837,6 @@ function App() {
   const todayCount=data?.[todayKey]||0;
   const wordsToNext=nextLevel?nextLevel.minWords-(data?.totalWords||0):null;
   const canGoPrev=history.length>0&&!(isInHistory&&currentIdx===0);
-
   return(
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:`linear-gradient(160deg,${c.bg} 0%,#0a0a0f 70%)`}}>
       <style>{`
@@ -609,7 +848,6 @@ function App() {
         @keyframes pop{0%{transform:scale(0.8);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
         @keyframes levelUp{0%{transform:scale(0);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
       `}</style>
-
       {showLevelUp&&<LevelUpModal level={showLevelUp} accent={c.accent} onClose={()=>setShowLevelUp(null)}/>}
       {showStreak&&(
         <div style={{position:"fixed",top:"16px",left:"50%",transform:"translateX(-50%)",zIndex:100,background:`${c.accent}ee`,borderRadius:"20px",padding:"10px 24px",display:"flex",alignItems:"center",gap:"8px",whiteSpace:"nowrap"}}>
@@ -617,8 +855,6 @@ function App() {
           <span style={{fontSize:"15px",fontWeight:"700",color:"#fff"}}>連續 {data?.streak} 天打卡！</span>
         </div>
       )}
-
-      {/* ── HEADER ── */}
       <div style={{padding:"12px 16px 10px",borderBottom:`1px solid ${c.accent}22`,flexShrink:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:"460px",margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
@@ -655,8 +891,6 @@ function App() {
           </div>
         )}
       </div>
-
-      {/* ── 複習模式 ── */}
       {screen==="review"&&(
         <div style={{flex:1,overflowY:"auto"}}>
           <div style={{textAlign:"center",padding:"16px 0 4px",fontSize:"14px",color:"#f5a623",fontWeight:"700"}}>
@@ -665,9 +899,7 @@ function App() {
           <ReviewScreen reviews={reviews} accent={c.accent} onDone={handleReviewDone}/>
         </div>
       )}
-
-      {/* ── 學習模式 ── */}
-      {screen==="main"&&(
+      {screen==="main"&&activeTab==="learn"&&(
         <div style={{flex:1,overflowY:"auto",padding:"12px 14px 16px",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
           {isInHistory&&(
             <div style={{textAlign:"center",marginBottom:"10px",padding:"5px",background:`${c.accent}18`,borderRadius:"8px",fontSize:"12px",color:c.accent}}>
@@ -742,17 +974,32 @@ function App() {
           )}
         </div>
       )}
-
-      {/* ── 底部 ── */}
-      <div style={{padding:"10px 16px",borderTop:`1px solid ${c.accent}15`,textAlign:"center",flexShrink:0}}>
-        <button onClick={()=>{if(confirm("重新設定主題？")){const d={...appData};delete d.topic;delete d.savedQueue;saveData(d);setScreen("setup");setHistory([]);setWordQueue([]);setCurrentWord(null);setCurrentIdx(-1);}}} style={{background:"none",border:`1px solid ${c.accent}28`,color:`${c.accent}77`,borderRadius:"16px",padding:"6px 16px",fontSize:"11px",cursor:"pointer"}}>
-          ⚙️ 更改主題
+      {/* ── 對話 Tab ── */}
+      {activeTab==="chat"&&screen!=="review"&&(
+        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <ConversationScreen appData={appData} accent={c.accent}/>
+        </div>
+      )}
+      {/* ── 底部 Tab Bar ── */}
+      <div style={{borderTop:`1px solid ${c.accent}22`,background:"rgba(0,0,0,0.6)",flexShrink:0,display:"flex",alignItems:"stretch"}}>
+        {[
+          {id:"learn",label:"學習",emoji:"📚"},
+          {id:"chat",  label:"對話",emoji:"💬"},
+        ].map(tab=>(
+          <button key={tab.id} onClick={()=>{setActiveTab(tab.id);if(screen==="review"&&tab.id==="chat"){}}} style={{flex:1,padding:"10px 6px 8px",background:"none",border:"none",color:activeTab===tab.id?c.accent:"#555",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",transition:"color 0.2s"}}>
+            <span style={{fontSize:"20px"}}>{tab.emoji}</span>
+            <span style={{fontSize:"10px",fontWeight:activeTab===tab.id?"700":"400",letterSpacing:"1px"}}>{tab.label}</span>
+            {activeTab===tab.id&&<div style={{width:"20px",height:"2px",background:c.accent,borderRadius:"2px"}}/>}
+          </button>
+        ))}
+        <button onClick={()=>{if(confirm("重新設定主題？")){const d={...appDataRef.current};delete d.topic;delete d.savedQueue;saveData(d);setScreen("setup");setHistory([]);setWordQueue([]);setCurrentWord(null);setCurrentIdx(-1);}}} style={{width:"52px",padding:"10px 6px 8px",background:"none",border:"none",color:"#444",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",borderLeft:`1px solid ${c.accent}15`}}>
+          <span style={{fontSize:"18px"}}>⚙️</span>
+          <span style={{fontSize:"10px",letterSpacing:"1px"}}>設定</span>
         </button>
       </div>
     </div>
   );
 }
-
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
