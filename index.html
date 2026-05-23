@@ -423,10 +423,10 @@ function ConversationScreen({appData, accent}) {
     const useWordBound = Math.random() > 0.5;
     const recentWords = appData?.seenWords?.slice(-5)?.join(", ") || "";
     const prompt = useWordBound && recentWords
-      ? `你是英文對話練習夥伴。根據這些最近學的單字：${recentWords}，設計一個真實生活對話場景任務給程度${level}的台灣學習者。
-用JSON回答，格式：{"scenario":"場景描述（中文，2句話）","task":"你的任務（中文，1句話）","opening":"你的開場白（英文，1-2句，友善自然）","targetWords":["${recentWords.split(",")[0]?.trim()}"]}`
-      : `你是英文對話練習夥伴。為程度${level}的台灣學習者設計一個真實生活對話場景任務（朋友聚會/工作/旅遊/日常）。
-用JSON回答，格式：{"scenario":"場景描述（中文，2句話）","task":"你的任務（中文，1句話）","opening":"你的開場白（英文，1-2句，友善自然）","targetWords":[]}`;
+      ? `為台灣英文學習者設計一個超生活化的對話場景，融入這些單字：${recentWords}。
+用JSON回答：{"scenario":"場景（中文1句）","task":"任務（中文1句，要具體）","opening":"開場白（英文1句，像朋友傳訊息，口語簡短，最多10個字）","targetWords":["${recentWords.split(",")[0]?.trim()}"]}`
+      : `為台灣英文學習者設計一個超生活化的對話場景（朋友聚會/週末計劃/吃飯/購物/旅遊）。
+用JSON回答：{"scenario":"場景（中文1句）","task":"任務（中文1句，要具體）","opening":"開場白（英文1句，像朋友傳訊息，口語簡短，最多10個字）","targetWords":[]}`;
     try {
       const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
@@ -596,10 +596,18 @@ function ConversationScreen({appData, accent}) {
       // 找到第一個 user 訊息的位置開始
       const firstUserIdx = allHistory.findIndex(m => m.role === "user");
       const history = firstUserIdx >= 0 ? allHistory.slice(firstUserIdx) : allHistory;
-      const sysPrompt = `你是英文對話練習夥伴。場景：${currentScenario?.scenario} 任務：${currentScenario?.task}
-用自然的口語英文回應，1-3句話，根據對方說的內容自然推進對話。
-第${currentCount}輪（共${MAX_TURNS}輪），快到最後時自然收尾。
-只說英文，不加解釋。`;
+      const sysPrompt = `You are a casual American friend texting. Scene: ${currentScenario?.scenario}
+
+Rules:
+- Max 1-2 sentences, under 15 words total
+- START with a filler word or reaction EVERY time:
+  Reactions: "Oh wow!", "No way!", "Seriously?", "Haha", "Aw man", "Nice!", "Wait what?", "Same!", "Totally!", "Right?", "Oh yeah!", "Gotcha"
+  Fillers: "I mean...", "Honestly,", "Lowkey,", "Tbh,", "Omg"
+- Use contractions always (I'm, can't, that's, wanna, gonna, gotta)
+- Sometimes reply with just 1-3 words: "Same lol", "No way!", "That's wild", "Oof"
+- Ask short follow-up OR just react, don't always ask questions
+- Round ${currentCount} of ${MAX_TURNS}, wrap up naturally near end
+- English only, zero formal language`;
       const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({max_tokens:200,
