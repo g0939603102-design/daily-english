@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
 
-  const OPENAI_API_KEY = "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";
+  const OPENAI_API_KEY = "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";
   const { messages, system, max_tokens, useWhisper, audioBase64, mimeType } = req.body;
 
   if (useWhisper && audioBase64) {
@@ -35,7 +35,6 @@ export default async function handler(req, res) {
       const rawText = await whisperRes.text();
       let data;
       try { data = JSON.parse(rawText); } catch(e) { data = { error: rawText }; }
-      
       if (!whisperRes.ok || data.error) {
         return res.status(200).json({ transcript: '', error: JSON.stringify(data) });
       }
