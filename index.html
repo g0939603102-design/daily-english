@@ -741,26 +741,45 @@ Rules:
 
   async function generateFeedback(allTurns) {
     setPhase("feedback_loading");
-    const userLines = allTurns.filter(t=>t.role==="user").map(t=>t.text).join("\n");
-    const prompt = `你是專業英文教練。分析這個台灣學習者的英文對話：
-場景：${scenario?.scenario}
-對話內容：${userLines}
-目標單字：${scenario?.targetWords?.join(", ")||"無"}
+    const userLines = allTurns.filter(t=>t.role==="user").map(t=>t.text);
+    if(userLines.length === 0) {
+      setFeedback({score:"—", mostUnnatural:"這次沒有對話內容可以分析。", wordsUsed:"—", nativeVersion:"—", encouragement:"先開口說幾句，再來看分析！"});
+      setPhase("feedback");
+      return;
+    }
+    const dialogue = allTurns.map(t=>`${t.role==="user"?"你":"Jamie"}: ${t.text}`).join("\n");
+    const prompt = `你是專業英文口語教練，分析台灣英文學習者的對話表現。
 
-用繁體中文給出簡潔回饋，嚴格用以下JSON格式：
-{"score":"A/B/C/D","mostUnnatural":"最不自然的一句（英文原句）+ 一句話說為什麼","wordsUsed":"用對的詞x個，用錯或漏掉的詞","nativeVersion":"如果是native speaker，剛才最關鍵的那一句會怎麼說（英文示範）"}`;
+【對話場景】${scenario?.scenario || "日常對話"}
+【完整對話記錄】
+${dialogue}
+
+請用繁體中文分析，只輸出純JSON，不要任何前綴或解釋文字，格式如下：
+{"score":"A、B、C或D其中一個字母","mostUnnatural":"指出最不自然的一句英文原句，加上一句中文說明為什麼不自然","improvement":"把那句話改成更自然的說法（英文）並說明差異","wordsUsed":"整體詞彙使用評語，例如用了哪些好詞、哪些地方可以更道地","nativeVersion":"Native speaker在這個情境最可能說的一句話（英文示範）","encouragement":"一句鼓勵學習者的話（中文，15字以內）"}`;
+
     try {
       const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({max_tokens:400, messages:[{role:"user",content:prompt}]})
+        body: JSON.stringify({max_tokens:600, messages:[{role:"user",content:prompt}]})
       });
       const data = await res.json();
       const text = data.content?.[0]?.text||"";
-      const clean = text.replace(/```json|```/g,"").trim();
-      const parsed = JSON.parse(clean);
+      // 更強健的 JSON 擷取：找第一個 { 到最後一個 }
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if(!jsonMatch) throw new Error("No JSON found");
+      const parsed = JSON.parse(jsonMatch[0]);
       setFeedback(parsed);
     } catch(e) {
-      setFeedback({score:"B",mostUnnatural:"分析失敗，請再試一次。",wordsUsed:"—",nativeVersion:"—"});
+      // fallback：至少顯示對話統計
+      const wordCount = userLines.join(" ").split(" ").length;
+      setFeedback({
+        score:"B",
+        mostUnnatural:"無法自動分析，但你今天說了 " + userLines.length + " 句、約 " + wordCount + " 個單字！",
+        improvement:"繼續練習，下次再來分析！",
+        wordsUsed:"每次開口都是進步 💪",
+        nativeVersion:"Keep it up! Practice makes perfect.",
+        encouragement:"你今天真的有在練習，很棒！"
+      });
     }
     setPhase("feedback");
   }
@@ -804,8 +823,14 @@ Rules:
           <div style={{fontSize:"10px",letterSpacing:"2px",color:"#e94560",textTransform:"uppercase",marginBottom:"6px"}}>⚠️ 最不自然的地方</div>
           <div style={{fontSize:"13px",color:"#ddd",lineHeight:"1.6"}}>{feedback?.mostUnnatural}</div>
         </div>
+        {feedback?.improvement && (
+          <div style={{background:"rgba(255,200,50,0.06)",border:"1px solid rgba(255,200,50,0.2)",borderRadius:"14px",padding:"14px"}}>
+            <div style={{fontSize:"10px",letterSpacing:"2px",color:"#f5a623",textTransform:"uppercase",marginBottom:"6px"}}>💡 這樣說更自然</div>
+            <div style={{fontSize:"13px",color:"#ddd",lineHeight:"1.6"}}>{feedback?.improvement}</div>
+          </div>
+        )}
         <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"14px",padding:"14px"}}>
-          <div style={{fontSize:"10px",letterSpacing:"2px",color:"#4a9eda",textTransform:"uppercase",marginBottom:"6px"}}>📊 單字使用</div>
+          <div style={{fontSize:"10px",letterSpacing:"2px",color:"#4a9eda",textTransform:"uppercase",marginBottom:"6px"}}>📊 詞彙使用評語</div>
           <div style={{fontSize:"13px",color:"#ddd",lineHeight:"1.6"}}>{feedback?.wordsUsed}</div>
         </div>
         <div style={{background:`${accent}11`,border:`1px solid ${accent}33`,borderRadius:"14px",padding:"14px"}}>
@@ -813,6 +838,11 @@ Rules:
           <div style={{fontSize:"14px",color:"#fff",lineHeight:"1.6",fontStyle:"italic"}}>{feedback?.nativeVersion}</div>
           <button onClick={()=>{const u=new SpeechSynthesisUtterance(feedback?.nativeVersion||"");u.lang="en-US";u.rate=0.85;window.speechSynthesis.speak(u);}} style={{marginTop:"8px",background:`${accent}22`,border:`1px solid ${accent}44`,color:accent,borderRadius:"12px",padding:"5px 14px",fontSize:"12px",cursor:"pointer"}}>🔊 聽示範</button>
         </div>
+        {feedback?.encouragement && (
+          <div style={{textAlign:"center",padding:"12px",background:"rgba(82,183,136,0.08)",border:"1px solid rgba(82,183,136,0.2)",borderRadius:"14px"}}>
+            <div style={{fontSize:"14px",color:"#52b788"}}>{feedback?.encouragement} 🎉</div>
+          </div>
+        )}
       </div>
       <button onClick={reset} style={{width:"100%",background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"13px",fontSize:"15px",cursor:"pointer",fontWeight:"700"}}>
         再練一次 🔄
