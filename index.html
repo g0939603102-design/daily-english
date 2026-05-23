@@ -425,7 +425,7 @@ function ConversationScreen({appData, accent}) {
   const recRef = useRef(null);
   const gotRef = useRef(false);
   const bottomRef = useRef(null);
-  const MAX_TURNS = 5;
+
 
   useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [turns, aiThinking]);
 
@@ -549,10 +549,6 @@ function ConversationScreen({appData, accent}) {
     const currentCount = turnCount;
     const currentScenario = scenario;
     setCorrection(null); setCorrectionPhase(null); setPracticeStatus("idle");
-    if(currentCount >= MAX_TURNS) {
-      await generateFeedback(currentTurns);
-      return;
-    }
     await continueConversation(currentTurns, currentCount, currentScenario);
   }
 
@@ -690,10 +686,6 @@ function ConversationScreen({appData, accent}) {
       return;
     }
 
-    if(newCount >= MAX_TURNS) {
-      await generateFeedback(newTurns);
-      return;
-    }
     await continueConversation(newTurns, newCount, scenario);
   }
 
@@ -704,19 +696,24 @@ function ConversationScreen({appData, accent}) {
       const firstUserIdx = allHistory.findIndex(m => m.role === "user");
       const history = firstUserIdx >= 0 ? allHistory.slice(firstUserIdx) : allHistory;
 
-      // ── 改良版 system prompt：角色一致、不自相矛盾 ──
+      // 取今天學的新單字（最近 seenWords），每3輪提醒 AI 用一次
+      const todayWords = (appData?.seenWords || []).slice(-8);
+      const wordHint = todayWords.length > 0 && currentCount % 3 === 0
+        ? `\n- IMPORTANT: In this response, naturally use or trigger the user to use one of these words/phrases: ${todayWords.join(", ")} — weave it into the conversation organically, don't force it`
+        : "";
+
       const sysPrompt = `You are Jamie, a friendly Taiwanese-American texting a friend in English.
 Scene: ${currentScenario?.scenario}
 IMPORTANT: You are the one who initiated this conversation. Stay 100% consistent with what you said before.
 
 Rules:
-- NEVER contradict yourself. If you invited them to do something, you are going too — you cannot suddenly say you can't make it or have other plans.
+- NEVER contradict yourself. If you invited them to do something, you are going too.
 - React naturally to what they just said: "Oh nice!", "Haha that's fair", "Aw man", "No way!", "That works!"
 - Max 1-2 sentences, under 15 words total
 - Use contractions always: I'm, can't, wanna, gonna, gotta, that's
 - Sometimes react with just 2-4 words: "Same lol", "No way!", "Oof totally"
 - Ask a short follow-up OR just react — don't always end with a question
-- Round ${currentCount} of ${MAX_TURNS}${currentCount >= MAX_TURNS - 1 ? " — wrap up warmly, like ending a text chat with a friend" : ""}
+- This is round ${currentCount}, keep the conversation going naturally — do NOT wrap up or say goodbye${wordHint}
 - English only, zero formal language`;
 
       const res = await fetch("/api/chat", {
@@ -826,7 +823,7 @@ Rules:
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
       <div style={{padding:"10px 14px",background:`${accent}11`,borderBottom:`1px solid ${accent}22`,flexShrink:0}}>
-        <div style={{fontSize:"11px",color:accent,marginBottom:"2px"}}>📍 場景 · {turnCount}/{MAX_TURNS} 輪</div>
+        <div style={{fontSize:"11px",color:accent,marginBottom:"2px"}}>📍 場景 · 第 {turnCount} 輪</div>
         <div style={{fontSize:"12px",color:"#aaa",lineHeight:"1.5"}}>{scenario?.task}</div>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"10px"}}>
@@ -926,9 +923,14 @@ Rules:
       <div style={{padding:"12px 14px",borderTop:`1px solid ${accent}22`,flexShrink:0}}>
         {listenError&&<div style={{fontSize:"12px",color:"#f5a623",marginBottom:"8px",textAlign:"center"}}>{listenError}</div>}
         {!listening&&!aiThinking&&!correctionPhase&&(
-          <button onClick={startListening} style={{width:"100%",background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"14px",fontSize:"15px",cursor:"pointer",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
-            🎙️ 說話
-          </button>
+          <div style={{display:"flex",gap:"8px"}}>
+            <button onClick={startListening} style={{flex:1,background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"14px",fontSize:"15px",cursor:"pointer",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
+              🎙️ 說話
+            </button>
+            <button onClick={()=>generateFeedback(turns)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#aaa",borderRadius:"14px",padding:"14px 16px",fontSize:"13px",cursor:"pointer",fontWeight:"600",whiteSpace:"nowrap"}}>
+              結束 📊
+            </button>
+          </div>
         )}
         {listening&&!correctionPhase&&(
           <div style={{textAlign:"center",padding:"14px"}}>
