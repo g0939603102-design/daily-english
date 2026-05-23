@@ -1076,7 +1076,7 @@ function App() {
           </div>
         )}
       </div>
-      {screen==="review"&&(
+      {screen==="review"&&activeTab==="learn"&&(
         <div style={{flex:1,overflowY:"auto"}}>
           <div style={{textAlign:"center",padding:"16px 0 4px",fontSize:"14px",color:"#f5a623",fontWeight:"700"}}>
             🔁 今日複習（{reviews.length} 個）
@@ -1160,7 +1160,7 @@ function App() {
         </div>
       )}
       {/* ── 對話 Tab ── */}
-      {activeTab==="chat"&&screen!=="review"&&(
+      {activeTab==="chat"&&(
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <ConversationScreen appData={appData} accent={c.accent}/>
         </div>
@@ -1171,7 +1171,7 @@ function App() {
           {id:"learn",label:"學習",emoji:"📚"},
           {id:"chat",  label:"對話",emoji:"💬"},
         ].map(tab=>(
-          <button key={tab.id} onClick={()=>{setActiveTab(tab.id);if(screen==="review"&&tab.id==="chat"){}}} style={{flex:1,padding:"10px 6px 8px",background:"none",border:"none",color:activeTab===tab.id?c.accent:"#555",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",transition:"color 0.2s"}}>
+          <button key={tab.id} onClick={()=>{ setActiveTab(tab.id); }} style={{flex:1,padding:"10px 6px 8px",background:"none",border:"none",color:activeTab===tab.id?c.accent:"#555",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",transition:"color 0.2s"}}>
             <span style={{fontSize:"20px"}}>{tab.emoji}</span>
             <span style={{fontSize:"10px",fontWeight:activeTab===tab.id?"700":"400",letterSpacing:"1px"}}>{tab.label}</span>
             {activeTab===tab.id&&<div style={{width:"20px",height:"2px",background:c.accent,borderRadius:"2px"}}/>}
