@@ -558,7 +558,7 @@ function ConversationScreen({appData, accent}) {
             const res = await fetch('/api/chat', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ useWhisper: true, audioBase64: base64 })
+              body: JSON.stringify({ useWhisper: true, audioBase64: base64, mimeType })
             });
             const data = await res.json();
             const text = data.transcript || '';
