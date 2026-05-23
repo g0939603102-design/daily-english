@@ -13,8 +13,8 @@ export default async function handler(req, res) {
   if (useWhisper && audioBase64) {
     try {
       const audioBuffer = Buffer.from(audioBase64, 'base64');
-      const actualMime = mimeType || 'audio/mp4';
-      const ext = actualMime.includes('webm') ? 'webm' : actualMime.includes('ogg') ? 'ogg' : 'mp4';
+      const actualMime = mimeType || 'audio/webm';
+      const ext = actualMime.includes('mp4') ? 'mp4' : actualMime.includes('ogg') ? 'ogg' : 'webm';
       
       const boundary = 'Boundary' + Date.now();
       const body = Buffer.concat([
@@ -32,11 +32,16 @@ export default async function handler(req, res) {
         body,
       });
 
-      const data = await whisperRes.json();
-      if (data.error) return res.status(500).json({ error: data.error.message });
+      const rawText = await whisperRes.text();
+      let data;
+      try { data = JSON.parse(rawText); } catch(e) { data = { error: rawText }; }
+      
+      if (!whisperRes.ok || data.error) {
+        return res.status(200).json({ transcript: '', error: JSON.stringify(data) });
+      }
       return res.status(200).json({ transcript: data.text || '' });
     } catch (e) {
-      return res.status(500).json({ error: e.message });
+      return res.status(200).json({ transcript: '', error: e.message });
     }
   }
 
