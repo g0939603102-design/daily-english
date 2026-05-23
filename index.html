@@ -556,6 +556,20 @@ function ConversationScreen({appData, accent}) {
     await continueConversation(currentTurns, currentCount, currentScenario);
   }
 
+  function retryUserSay() {
+    setTurns(prev => {
+      const newTurns = [...prev];
+      for(let i = newTurns.length - 1; i >= 0; i--) {
+        if(newTurns[i].role === "user") { newTurns.splice(i, 1); break; }
+      }
+      return newTurns;
+    });
+    setTurnCount(prev => Math.max(0, prev - 1));
+    setCorrection(null);
+    setCorrectionPhase(null);
+    setPracticeStatus("idle");
+  }
+
   function speakText(text) {
     if(!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
@@ -860,8 +874,8 @@ Rules:
               <button onClick={()=>{speakText(correction.correction);setCorrectionPhase("practice");setPracticeStatus("idle");}} style={{width:"100%",background:correction.type==="chinese"?"#52b788":"#e94560",border:"none",color:"#fff",borderRadius:"12px",padding:"11px",fontSize:"14px",cursor:"pointer",fontWeight:"700",marginBottom:"8px"}}>
                 🎙️ {correction.type==="chinese"?"學起來，說說看！":"我來說說看！"}
               </button>
-              <button onClick={dismissCorrection} style={{width:"100%",background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"#666",borderRadius:"12px",padding:"9px",fontSize:"12px",cursor:"pointer"}}>
-                ❌ 這不是我的意思，跳過繼續
+              <button onClick={retryUserSay} style={{width:"100%",background:"none",border:"1px solid rgba(255,100,100,0.3)",color:"#e94560",borderRadius:"12px",padding:"9px",fontSize:"12px",cursor:"pointer"}}>
+                🔄 這不是我的意思，我重新說
               </button>
             </div>
           )}
@@ -901,7 +915,7 @@ Rules:
                   </div>
                   <div style={{display:"flex",gap:"8px"}}>
                     <button onClick={()=>{setPracticeStatus("idle");}} style={{flex:1,background:"#e94560",border:"none",color:"#fff",borderRadius:"12px",padding:"10px",fontSize:"13px",cursor:"pointer",fontWeight:"700"}}>🎙️ 再說</button>
-                    <button onClick={dismissCorrection} style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#888",borderRadius:"12px",padding:"10px",fontSize:"13px",cursor:"pointer"}}>跳過，繼續</button>
+                    <button onClick={retryUserSay} style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,100,100,0.3)",color:"#e94560",borderRadius:"12px",padding:"10px",fontSize:"13px",cursor:"pointer"}}>🔄 重新說</button>
                   </div>
                 </div>
               )}
