@@ -491,7 +491,7 @@ function ConversationScreen({appData, accent}) {
       await generateFeedback(currentTurns);
       return;
     }
-    await continueConversation(currentTurns, currentCount);
+    await continueConversation(currentTurns, currentCount, scenario);
   }
 
   function speakText(text) {
@@ -584,10 +584,10 @@ function ConversationScreen({appData, accent}) {
       await generateFeedback(newTurns);
       return;
     }
-    await continueConversation(newTurns, newCount);
+    await continueConversation(newTurns, newCount, scenario);
   }
 
-  async function continueConversation(currentTurns, currentCount) {
+  async function continueConversation(currentTurns, currentCount, currentScenario) {
     setAiThinking(true);
     try {
       // Anthropic 規定第一條必須是 user，過濾掉開頭的 assistant 訊息
@@ -595,7 +595,7 @@ function ConversationScreen({appData, accent}) {
       // 找到第一個 user 訊息的位置開始
       const firstUserIdx = allHistory.findIndex(m => m.role === "user");
       const history = firstUserIdx >= 0 ? allHistory.slice(firstUserIdx) : allHistory;
-      const sysPrompt = `你是英文對話練習夥伴。場景：${scenario?.scenario} 任務：${scenario?.task}
+      const sysPrompt = `你是英文對話練習夥伴。場景：${currentScenario?.scenario} 任務：${currentScenario?.task}
 用自然的口語英文回應，1-3句話，根據對方說的內容自然推進對話。
 第${currentCount}輪（共${MAX_TURNS}輪），快到最後時自然收尾。
 只說英文，不加解釋。`;
@@ -605,7 +605,10 @@ function ConversationScreen({appData, accent}) {
           system: sysPrompt, messages:history})
       });
       const data = await res.json();
-      const aiText = data.content?.[0]?.text || "I see! Tell me more.";
+      const aiText = data.content?.[0]?.text || 
+        (data.error ? `Error: ${data.error}` : null) ||
+        (data.type === "error" ? `API Error: ${JSON.stringify(data)}` : null) ||
+        "I see! Tell me more.";
       let aiCn = "";
       try {
         const tr = await fetch("/api/chat", {
