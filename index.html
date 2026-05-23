@@ -428,9 +428,9 @@ function ConversationScreen({appData, accent}) {
       : `你是英文對話練習夥伴。為程度${level}的台灣學習者設計一個真實生活對話場景任務（朋友聚會/工作/旅遊/日常）。
 用JSON回答，格式：{"scenario":"場景描述（中文，2句話）","task":"你的任務（中文，1句話）","opening":"你的開場白（英文，1-2句，友善自然）","targetWords":[]}`;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:400,
+        body: JSON.stringify({max_tokens:400,
           messages:[{role:"user",content:prompt}]})
       });
       const data = await res.json();
@@ -440,9 +440,9 @@ function ConversationScreen({appData, accent}) {
       // 翻譯 opening
       let openingCn = "";
       try {
-        const tr = await fetch("https://api.anthropic.com/v1/messages", {
+        const tr = await fetch("/api/chat", {
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:100,
+          body: JSON.stringify({max_tokens:100,
             messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${parsed.opening}`}]})
         });
         const td = await tr.json();
@@ -531,9 +531,9 @@ function ConversationScreen({appData, accent}) {
     // 翻譯用戶說的話
     let userCn = "";
     try {
-      const tr = await fetch("https://api.anthropic.com/v1/messages", {
+      const tr = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:100,
+        body: JSON.stringify({max_tokens:100,
           messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${userText}`}]})
       });
       const td = await tr.json();
@@ -548,9 +548,9 @@ function ConversationScreen({appData, accent}) {
     // ── 即時糾錯：先檢查這句話有沒有問題 ──
     let correction = null;
     try {
-      const checkRes = await fetch("https://api.anthropic.com/v1/messages", {
+      const checkRes = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:300,
+        body: JSON.stringify({max_tokens:300,
           messages:[{role:"user", content:`你是活潑友善的英文教練。分析這句話：「${userText}」
 
 情況一：句子裡有中文（可能是中英混雜，例如「I feel 很開心」或純中文「我不知道怎麼說」）
@@ -595,18 +595,18 @@ function ConversationScreen({appData, accent}) {
 用自然的口語英文回應，1-3句話，根據對方說的內容自然推進對話。
 第${currentCount}輪（共${MAX_TURNS}輪），快到最後時自然收尾。
 只說英文，不加解釋。`;
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:200,
+        body: JSON.stringify({max_tokens:200,
           system: sysPrompt, messages:history})
       });
       const data = await res.json();
       const aiText = data.content?.[0]?.text || "I see! Tell me more.";
       let aiCn = "";
       try {
-        const tr = await fetch("https://api.anthropic.com/v1/messages", {
+        const tr = await fetch("/api/chat", {
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:100,
+          body: JSON.stringify({max_tokens:100,
             messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${aiText}`}]})
         });
         const td = await tr.json();
@@ -631,9 +631,9 @@ function ConversationScreen({appData, accent}) {
 用繁體中文給出簡潔回饋，嚴格用以下JSON格式：
 {"score":"A/B/C/D","mostUnnatural":"最不自然的一句（英文原句）+ 一句話說為什麼","wordsUsed":"用對的詞x個，用錯或漏掉的詞","nativeVersion":"如果是native speaker，剛才最關鍵的那一句會怎麼說（英文示範）"}`;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:400,
+        body: JSON.stringify({max_tokens:400,
           messages:[{role:"user",content:prompt}]})
       });
       const data = await res.json();
