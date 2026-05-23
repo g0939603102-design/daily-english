@@ -605,10 +605,7 @@ function ConversationScreen({appData, accent}) {
           system: sysPrompt, messages:history})
       });
       const data = await res.json();
-      const aiText = data.content?.[0]?.text || 
-        (data.error ? `Error: ${data.error}` : null) ||
-        (data.type === "error" ? `API Error: ${JSON.stringify(data)}` : null) ||
-        "I see! Tell me more.";
+      const aiText = data.content?.[0]?.text || "抱歉，我沒聽清楚，可以再說一次嗎？";
       let aiCn = "";
       try {
         const tr = await fetch("/api/chat", {
