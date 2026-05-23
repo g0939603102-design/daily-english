@@ -26,7 +26,6 @@ button { font-family: inherit; }
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel">
 const { useState, useRef, useEffect, useCallback } = React;
-// ── Supabase ──
 const SUPABASE_URL = "https://urayzkbkzrdrvsdrsmiu.supabase.co";
 const SUPABASE_KEY = "sb_publishable_wzs-IyQONvOXTpwKq46kPw_x6Kww_4r";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -36,7 +35,6 @@ function getUserId() {
   return id;
 }
 const USER_ID = getUserId();
-// ── SM-2 ──
 function calcNextReview(reviewCount, easeFactor, quality) {
   let newEase = easeFactor + (0.1 - (2 - quality) * (0.08 + (2 - quality) * 0.02));
   newEase = Math.max(1.3, newEase);
@@ -86,7 +84,6 @@ async function updateReview(id, reviewCount, easeFactor, quality) {
     ease_factor: newEase,
   }).eq("id", id);
 }
-// ── 常數 ──
 const TOPICS = [
   { id:"daily",    label:"日常生活", emoji:"🏠", desc:"吃飯、購物、交通、家居",   color:{bg:"#0d1b2a",accent:"#4a9eda",light:"#112233"} },
   { id:"travel",   label:"旅遊出行", emoji:"✈️", desc:"機場、飯店、問路、景點",   color:{bg:"#0d2018",accent:"#52b788",light:"#122a1e"} },
@@ -120,28 +117,19 @@ function strictMatch(heard,target) {
   const norm=s=>s.toLowerCase().replace(/[^a-z\s]/g,"").trim();
   const h=norm(heard),t=norm(target);
   if(h===t) return true;
-
-  // 包含關係：聽到的包含目標字（或目標字包含在聽到的裡面）
   if(h.includes(t)||t.includes(h)) return true;
-
   const tw=t.split(" "), hw=h.split(" ");
-
-  // 多個單字：目標的每個字都出現在聽到的話裡（允許順序不同）
   if(tw.length>1){
     const matchCount=tw.filter(tw=>hw.some(hw=>{
       if(hw===tw) return true;
-      // 允許每個字有最多2個字母的差異
       if(Math.abs(hw.length-tw.length)>2) return false;
       let d=0;
       const s=hw.length<tw.length?hw:tw, l=hw.length<tw.length?tw:hw;
       for(let i=0;i<s.length;i++) if(s[i]!==l[i]) d++;
       return (d+l.length-s.length)<=2;
     })).length;
-    // 超過70%的字匹配就算對
     return matchCount/tw.length>=0.7;
   }
-
-  // 單字：允許最多2個字母差異（比原本的1個寬鬆）
   if(Math.abs(h.length-t.length)>3) return false;
   let diff=0;
   const s=h.length<t.length?h:t, l=h.length<t.length?t:h;
@@ -414,7 +402,6 @@ function SetupScreen({onComplete}) {
     </div>
   );
 }
-// ── 自動繼續元件 ──
 function AutoContinue({onContinue, children}) {
   useEffect(()=>{
     const t = setTimeout(()=>{ onContinue(); }, 2500);
@@ -422,16 +409,14 @@ function AutoContinue({onContinue, children}) {
   },[]);
   return <div>{children}</div>;
 }
-
-// ── 對話模組 ──
 function ConversationScreen({appData, accent}) {
-  const [phase, setPhase] = useState("intro"); // intro | talking | feedback
+  const [phase, setPhase] = useState("intro");
   const [scenario, setScenario] = useState(null);
-  const [turns, setTurns] = useState([]); // [{role:"user"|"ai", text, isVoice}]
+  const [turns, setTurns] = useState([]);
   const [turnCount, setTurnCount] = useState(0);
-  const [correction, setCorrection] = useState(null); // {hasError, correction, correctionCn, coachComment, originalText}
-  const [correctionPhase, setCorrectionPhase] = useState(null); // show | practice | done
-  const [practiceStatus, setPracticeStatus] = useState("idle"); // idle | listening | success | fail
+  const [correction, setCorrection] = useState(null);
+  const [correctionPhase, setCorrectionPhase] = useState(null);
+  const [practiceStatus, setPracticeStatus] = useState("idle");
   const practiceRecRef = useRef(null);
   const [listening, setListening] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
@@ -444,7 +429,6 @@ function ConversationScreen({appData, accent}) {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [turns, aiThinking]);
 
-  // 生成場景
   async function generateScenario() {
     setPhase("loading");
     const totalWords = appData?.totalWords || 0;
@@ -459,20 +443,17 @@ function ConversationScreen({appData, accent}) {
     try {
       const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({max_tokens:400,
-          messages:[{role:"user",content:prompt}]})
+        body: JSON.stringify({max_tokens:400, messages:[{role:"user",content:prompt}]})
       });
       const data = await res.json();
       const text = data.content?.[0]?.text || "";
       const clean = text.replace(/```json|```/g,"").trim();
       const parsed = JSON.parse(clean);
-      // 翻譯 opening
       let openingCn = "";
       try {
         const tr = await fetch("/api/chat", {
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({max_tokens:100,
-            messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${parsed.opening}`}]})
+          body: JSON.stringify({max_tokens:100, messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${parsed.opening}`}]})
         });
         const td = await tr.json();
         openingCn = td.content?.[0]?.text || "";
@@ -482,9 +463,9 @@ function ConversationScreen({appData, accent}) {
       speakText(parsed.opening);
       setPhase("talking");
     } catch(e) {
-      const fallbackOpening = "Hey! Are you free this weekend? I was thinking we could go hiking!";
-      setScenario({scenario:"朋友邀你週末爬山，但你已有計劃。", task:"用英文婉拒並提議改期。", opening:fallbackOpening, targetWords:[]});
-      setTurns([{role:"ai", text:fallbackOpening, cn:"嘿！你這週末有空嗎？我在想我們可以去爬山！"}]);
+      const fallbackOpening = "Hey! Are you free this weekend? I was thinking we could grab some food!";
+      setScenario({scenario:"朋友邀你週末出去吃飯，但你已有計劃。", task:"用英文婉拒並提議改期。", opening:fallbackOpening, targetWords:[]});
+      setTurns([{role:"ai", text:fallbackOpening, cn:"嘿！你這週末有空嗎？我在想我們可以去吃個飯！"}]);
       speakText(fallbackOpening);
       setPhase("talking");
     }
@@ -502,9 +483,7 @@ function ConversationScreen({appData, accent}) {
         Array.from({length:e.results[i].length},(_,j)=>e.results[i][j].transcript)
       ).flat();
       const target = correction?.correction || "";
-      // 用寬鬆比對：任何一個辨識結果跟目標夠像就算對
       const ok = heard.some(h => strictMatch(h, target));
-      // 額外：如果目標的主要單字都有出現，也算對
       const targetWords = target.toLowerCase().replace(/[^a-z\s]/g,"").split(" ").filter(w=>w.length>2);
       const heardAll = heard.join(" ").toLowerCase();
       const keyWordsMatch = targetWords.length>0 && targetWords.filter(w=>heardAll.includes(w)).length/targetWords.length>=0.7;
@@ -517,7 +496,6 @@ function ConversationScreen({appData, accent}) {
   }
 
   async function dismissCorrection() {
-    // 先把所有需要的值存起來，再清除 state
     const currentTurns = [...turns];
     const currentCount = turnCount;
     const currentScenario = scenario;
@@ -587,13 +565,11 @@ function ConversationScreen({appData, accent}) {
   }
 
   async function handleUserSay(userText) {
-    // 翻譯用戶說的話
     let userCn = "";
     try {
       const tr = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({max_tokens:100,
-          messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${userText}`}]})
+        body: JSON.stringify({max_tokens:100, messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${userText}`}]})
       });
       const td = await tr.json();
       userCn = td.content?.[0]?.text || "";
@@ -604,17 +580,14 @@ function ConversationScreen({appData, accent}) {
     setTurnCount(newCount);
     setAiThinking(true);
 
-    // ── 即時糾錯：先檢查這句話有沒有問題 ──
     const hasChinese = /[一-鿿]/.test(userText);
     let correction = null;
 
-    // 有中文字元 → 直接翻譯，不需要 AI 判斷
     if (hasChinese) {
       try {
         const trRes = await fetch("/api/chat", {
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({max_tokens:200,
-            messages:[{role:"user", content:`把這句話翻譯成最自然的英文口語，只輸出JSON：
+          body: JSON.stringify({max_tokens:200, messages:[{role:"user", content:`把這句話翻譯成最自然的英文口語，只輸出JSON：
 {"correction":"英文說法","correctionCn":"${userText}","coachComment":"活潑一句話說這個怎麼說（15字內）"}`}]})
         });
         const trData = await trRes.json();
@@ -623,41 +596,37 @@ function ConversationScreen({appData, accent}) {
         correction = { hasError: true, type: "chinese", ...trParsed, originalText: userText };
       } catch(e) {}
     } else {
-    try {
-      const checkRes = await fetch("/api/chat", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({max_tokens:300,
-          messages:[{role:"user", content:`你是活潑友善的英文教練。分析這句話：「${userText}」
-${hasChinese ? "【注意：這句話包含中文，必須用情況一處理】" : ""}
+      try {
+        const checkRes = await fetch("/api/chat", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({max_tokens:300, messages:[{role:"user", content:`你是活潑友善的英文教練。分析這句話：「${userText}」
 
-情況一：句子裡有中文（可能是中英混雜，例如「I feel 很開心」或純中文「我不知道怎麼說」）
-→ 回傳JSON：{"hasError": true, "type": "chinese", "correction": "完整自然的英文說法", "correctionCn": "中文對照", "coachComment": "活潑說明，例如：喔這個用英文超好學！我們會說... 或 這句話native speaker這樣表達！（15字以內）"}
+情況一：句子裡有中文（中英混雜或純中文）
+→ 回傳JSON：{"hasError": true, "type": "chinese", "correction": "完整自然的英文說法", "correctionCn": "中文對照", "coachComment": "活潑說明（15字以內）"}
 
 情況二：純英文但不自然或有錯誤
-→ 回傳JSON：{"hasError": true, "type": "error", "correction": "正確自然的英文說法", "correctionCn": "中文翻譯", "coachComment": "活潑口語說明，例如：哎呀這樣說怪怪的！或 差一點點！（15字以內）"}
+→ 回傳JSON：{"hasError": true, "type": "error", "correction": "正確自然的英文說法", "correctionCn": "中文翻譯", "coachComment": "活潑口語說明（15字以內）"}
 
 情況三：純英文且完全正確自然
 → 回傳：{"hasError": false}
 
 只輸出JSON，不要其他文字。`}]})
-      });
-      const checkData = await checkRes.json();
-      const checkText = checkData.content?.[0]?.text || "{}";
-      const parsed = JSON.parse(checkText.replace(/```json|```/g,"").trim());
-      if(parsed.hasError) correction = parsed;
-    } catch(e) {}
-    } // end else (no Chinese)
+        });
+        const checkData = await checkRes.json();
+        const checkText = checkData.content?.[0]?.text || "{}";
+        const parsed = JSON.parse(checkText.replace(/```json|```/g,"").trim());
+        if(parsed.hasError) correction = parsed;
+      } catch(e) {}
+    }
 
     setAiThinking(false);
 
-    // 有錯誤 → 進入糾錯練習模式，暫停對話
     if(correction) {
       setCorrection({...correction, originalText: userText});
-      setCorrectionPhase("show"); // show | practice | done
+      setCorrectionPhase("show");
       return;
     }
 
-    // 沒錯誤 → 繼續對話
     if(newCount >= MAX_TURNS) {
       await generateFeedback(newTurns);
       return;
@@ -668,36 +637,36 @@ ${hasChinese ? "【注意：這句話包含中文，必須用情況一處理】"
   async function continueConversation(currentTurns, currentCount, currentScenario) {
     setAiThinking(true);
     try {
-      // Anthropic 規定第一條必須是 user，過濾掉開頭的 assistant 訊息
       const allHistory = currentTurns.map(t=>({role:t.role==="ai"?"assistant":"user", content:t.text}));
-      // 找到第一個 user 訊息的位置開始
       const firstUserIdx = allHistory.findIndex(m => m.role === "user");
       const history = firstUserIdx >= 0 ? allHistory.slice(firstUserIdx) : allHistory;
-      const sysPrompt = `You are a casual American friend texting. Scene: ${currentScenario?.scenario}
+
+      // ── 改良版 system prompt：角色一致、不自相矛盾 ──
+      const sysPrompt = `You are Jamie, a friendly Taiwanese-American texting a friend in English.
+Scene: ${currentScenario?.scenario}
+IMPORTANT: You are the one who initiated this conversation. Stay 100% consistent with what you said before.
 
 Rules:
+- NEVER contradict yourself. If you invited them to do something, you are going too — you cannot suddenly say you can't make it or have other plans.
+- React naturally to what they just said: "Oh nice!", "Haha that's fair", "Aw man", "No way!", "That works!"
 - Max 1-2 sentences, under 15 words total
-- START with a filler word or reaction EVERY time:
-  Reactions: "Oh wow!", "No way!", "Seriously?", "Haha", "Aw man", "Nice!", "Wait what?", "Same!", "Totally!", "Right?", "Oh yeah!", "Gotcha"
-  Fillers: "I mean...", "Honestly,", "Lowkey,", "Tbh,", "Omg"
-- Use contractions always (I'm, can't, that's, wanna, gonna, gotta)
-- Sometimes reply with just 1-3 words: "Same lol", "No way!", "That's wild", "Oof"
-- Ask short follow-up OR just react, don't always ask questions
-- Round ${currentCount} of ${MAX_TURNS}, wrap up naturally near end
+- Use contractions always: I'm, can't, wanna, gonna, gotta, that's
+- Sometimes react with just 2-4 words: "Same lol", "No way!", "Oof totally"
+- Ask a short follow-up OR just react — don't always end with a question
+- Round ${currentCount} of ${MAX_TURNS}${currentCount >= MAX_TURNS - 1 ? " — wrap up warmly, like ending a text chat with a friend" : ""}
 - English only, zero formal language`;
+
       const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({max_tokens:200,
-          system: sysPrompt, messages:history})
+        body: JSON.stringify({max_tokens:200, system: sysPrompt, messages:history})
       });
       const data = await res.json();
-      const aiText = data.content?.[0]?.text || "抱歉，我沒聽清楚，可以再說一次嗎？";
+      const aiText = data.content?.[0]?.text || "Haha nice! Tell me more.";
       let aiCn = "";
       try {
         const tr = await fetch("/api/chat", {
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({max_tokens:100,
-            messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${aiText}`}]})
+          body: JSON.stringify({max_tokens:100, messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${aiText}`}]})
         });
         const td = await tr.json();
         aiCn = td.content?.[0]?.text || "";
@@ -723,8 +692,7 @@ Rules:
     try {
       const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({max_tokens:400,
-          messages:[{role:"user",content:prompt}]})
+        body: JSON.stringify({max_tokens:400, messages:[{role:"user",content:prompt}]})
       });
       const data = await res.json();
       const text = data.content?.[0]?.text||"";
@@ -745,7 +713,6 @@ Rules:
 
   const scoreColor = {"A":"#52b788","B":"#4a9eda","C":"#f5a623","D":"#e94560"};
 
-  // ── 介面 ──
   if(phase==="intro") return (
     <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 20px",textAlign:"center"}}>
       <div style={{fontSize:"52px",marginBottom:"16px"}}>💬</div>
@@ -793,15 +760,12 @@ Rules:
     </div>
   );
 
-  // talking phase
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
-      {/* 場景說明 */}
       <div style={{padding:"10px 14px",background:`${accent}11`,borderBottom:`1px solid ${accent}22`,flexShrink:0}}>
         <div style={{fontSize:"11px",color:accent,marginBottom:"2px"}}>📍 場景 · {turnCount}/{MAX_TURNS} 輪</div>
         <div style={{fontSize:"12px",color:"#aaa",lineHeight:"1.5"}}>{scenario?.task}</div>
       </div>
-      {/* 對話區 */}
       <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"10px"}}>
         {turns.map((t,i)=>(
           <div key={i} style={{display:"flex",justifyContent:t.role==="user"?"flex-end":"flex-start",flexDirection:"column",alignItems:t.role==="user"?"flex-end":"flex-start",gap:"3px"}}>
@@ -811,7 +775,6 @@ Rules:
                 <button onClick={()=>speakText(t.text)} style={{display:"block",marginTop:"4px",background:"none",border:"none",color:`${accent}99`,fontSize:"11px",cursor:"pointer",padding:0}}>🔊 重聽</button>
               )}
             </div>
-            {/* 中文翻譯 */}
             {t.cn&&(
               <div style={{maxWidth:"82%",fontSize:"11px",color:"#666",padding:"0 4px",lineHeight:"1.5",textAlign:t.role==="user"?"right":"left"}}>
                 {t.cn}
@@ -828,7 +791,6 @@ Rules:
         )}
         <div ref={bottomRef}/>
       </div>
-      {/* ── 即時糾錯面板 ── */}
       {correctionPhase&&correction&&(
         <div style={{padding:"12px 14px",background:"#1a0a0a",borderTop:"2px solid #e94560",flexShrink:0,maxHeight:"55vh",overflowY:"auto"}}>
           {correctionPhase==="show"&&(
@@ -898,7 +860,6 @@ Rules:
           )}
         </div>
       )}
-      {/* 輸入區 */}
       <div style={{padding:"12px 14px",borderTop:`1px solid ${accent}22`,flexShrink:0}}>
         {listenError&&<div style={{fontSize:"12px",color:"#f5a623",marginBottom:"8px",textAlign:"center"}}>{listenError}</div>}
         {!listening&&!aiThinking&&!correctionPhase&&(
@@ -909,7 +870,7 @@ Rules:
         {listening&&!correctionPhase&&(
           <div style={{textAlign:"center",padding:"14px"}}>
             <div style={{fontSize:"28px",marginBottom:"4px"}}>🔴</div>
-            <div style={{fontSize:"13px",color:"#f5a623"}}>錄音中（最多5秒）... 說完按「完成」</div>
+            <div style={{fontSize:"13px",color:"#f5a623"}}>錄音中（最多6秒）... 說完按「完成」</div>
             <button onClick={()=>{if(recRef.current&&recRef.current.state==="recording")recRef.current.stop();setListening(false);}} style={{marginTop:"8px",background:"none",border:"1px solid #555",color:"#777",borderRadius:"10px",padding:"4px 14px",fontSize:"12px",cursor:"pointer"}}>完成</button>
           </div>
         )}
@@ -933,7 +894,6 @@ function LevelUpModal({level,accent,onClose}) {
     </div>
   );
 }
-// ── 主 App ──
 function App() {
   const [appData,setAppData]=useState(null);
   const [screen,setScreen]=useState("init");
@@ -949,17 +909,12 @@ function App() {
   const [showLevelUp,setShowLevelUp]=useState(null);
   const [reviews,setReviews]=useState([]);
   const [reviewCount,setReviewCount]=useState(0);
-  const [activeTab,setActiveTab]=useState("learn"); // learn | chat
+  const [activeTab,setActiveTab]=useState("learn");
   const loadingRef=useRef(false);
-
-  // ── 🔑 KEY FIX: appDataRef 始終指向最新的 appData ──
-  // 避免 handleNext 閉包讀到舊的 state 值
   const appDataRef = useRef(null);
   useEffect(() => { appDataRef.current = appData; }, [appData]);
-
   const isInHistory=currentIdx>=0;
   const displayWord=isInHistory?history[currentIdx]:currentWord;
-
   useEffect(()=>{
     async function init() {
       const data=loadData();
@@ -990,7 +945,6 @@ function App() {
     }
     init();
   },[]);
-
   function startLearning(data) {
     if(data.savedQueue&&data.savedQueue.length>0){
       setCurrentWord(data.savedQueue[0]);
@@ -1000,7 +954,6 @@ function App() {
       loadMoreWords(data);
     }
   }
-
   async function loadMoreWords(data) {
     if(loadingRef.current) return;
     loadingRef.current=true; setLoading(true); setLoadError(null);
@@ -1021,7 +974,6 @@ function App() {
     }catch(e){setLoadError("無法生成單字，請稍後再試");}
     finally{loadingRef.current=false;setLoading(false);}
   }
-
   async function handleNext() {
     if(isInHistory){
       const nextIdx=currentIdx+1;
@@ -1030,45 +982,33 @@ function App() {
       setRevealed(false);setSpeechPassed(false);
       return;
     }
-
-    // ── 🔑 KEY FIX: 永遠從 appDataRef 讀最新值，不用閉包裡的 appData ──
     const data = appDataRef.current;
     if (!data) return;
-
     const today=getToday();
     const todayKey=`today_${today}`;
-
-    // 🔑 KEY FIX: 從 localStorage 再讀一次確保最新累積數，防止 state 延遲
     const freshFromStorage = loadData();
     const baseTotalWords = freshFromStorage?.totalWords ?? data.totalWords ?? 0;
-
     const newTodayCount=(data[todayKey]||0)+1;
     const newTotal = baseTotalWords + 1;
-
     const oldLevel=getCurrentLevel(baseTotalWords);
     const newLevel=getCurrentLevel(newTotal);
     const leveledUp=newLevel.id!==oldLevel.id;
     const newSeenWords=[...(data.seenWords||[]),currentWord?.word].filter(Boolean);
-
     const updated={
       ...data,
       totalWords: newTotal,
       [todayKey]: newTodayCount,
       seenWords: newSeenWords.slice(-100)
     };
-
-    // 🔑 立即同步寫入 storage 和 ref，不等 React re-render
     appDataRef.current = updated;
     setAppData(updated);
-    saveData(updated);  // ← 每次都寫入，保證不丟失
-
+    saveData(updated);
     if(currentWord) {
       await saveWordToReview(currentWord.word, currentWord.chineseMeaning, currentWord.partOfSpeech);
       setHistory(prev=>[...prev,currentWord]);
     }
     setRevealed(false);setSpeechPassed(false);
     if(leveledUp) setShowLevelUp(newLevel);
-
     if(wordQueue.length>0){
       const nextWord=wordQueue[0]; const newQueue=wordQueue.slice(1);
       setCurrentWord(nextWord); setWordQueue(newQueue);
@@ -1082,14 +1022,12 @@ function App() {
     }
     if(wordQueue.length<=3) loadMoreWords(updated);
   }
-
   function handlePrev() {
     if(history.length===0) return;
     if(isInHistory&&currentIdx>0){setCurrentIdx(currentIdx-1);setCurrentWord(history[currentIdx-1]);}
     else if(!isInHistory){setCurrentIdx(history.length-1);setCurrentWord(history[history.length-1]);}
     setRevealed(false);setSpeechPassed(false);
   }
-
   function handleSetup(topic) {
     const newData={topic,totalWords:0,streak:0,lastCheckin:getToday(),createdAt:getToday()};
     setAppData(newData);
@@ -1098,13 +1036,11 @@ function App() {
     setScreen("main");
     loadMoreWords(newData);
   }
-
   function handleReviewDone() {
     setReviews([]); setScreen("main");
     const latest = appDataRef.current;
     if(latest) startLearning(latest);
   }
-
   if(screen==="setup") return <SetupScreen onComplete={handleSetup}/>;
   const data=appData;
   const c=getTopicColor(data?.topic);
@@ -1252,13 +1188,11 @@ function App() {
           )}
         </div>
       )}
-      {/* ── 對話 Tab ── */}
       {activeTab==="chat"&&(
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <ConversationScreen appData={appData} accent={c.accent}/>
         </div>
       )}
-      {/* ── 底部 Tab Bar ── */}
       <div style={{borderTop:`1px solid ${c.accent}22`,background:"rgba(0,0,0,0.6)",flexShrink:0,display:"flex",alignItems:"stretch"}}>
         {[
           {id:"learn",label:"學習",emoji:"📚"},
