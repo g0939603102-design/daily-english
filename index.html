@@ -590,7 +590,11 @@ function ConversationScreen({appData, accent}) {
   async function continueConversation(currentTurns, currentCount) {
     setAiThinking(true);
     try {
-      const history = currentTurns.map(t=>({role:t.role==="ai"?"assistant":"user", content:t.text}));
+      // Anthropic 規定第一條必須是 user，過濾掉開頭的 assistant 訊息
+      const allHistory = currentTurns.map(t=>({role:t.role==="ai"?"assistant":"user", content:t.text}));
+      // 找到第一個 user 訊息的位置開始
+      const firstUserIdx = allHistory.findIndex(m => m.role === "user");
+      const history = firstUserIdx >= 0 ? allHistory.slice(firstUserIdx) : allHistory;
       const sysPrompt = `你是英文對話練習夥伴。場景：${scenario?.scenario} 任務：${scenario?.task}
 用自然的口語英文回應，1-3句話，根據對方說的內容自然推進對話。
 第${currentCount}輪（共${MAX_TURNS}輪），快到最後時自然收尾。
@@ -601,7 +605,8 @@ function ConversationScreen({appData, accent}) {
           system: sysPrompt, messages:history})
       });
       const data = await res.json();
-      const aiText = data.content?.[0]?.text || "I see! Tell me more.";
+      console.log("chat response:", JSON.stringify(data).slice(0,200));
+      const aiText = data.content?.[0]?.text || data.error || "I see! Tell me more.";
       let aiCn = "";
       try {
         const tr = await fetch("/api/chat", {
