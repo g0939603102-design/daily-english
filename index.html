@@ -483,15 +483,16 @@ function ConversationScreen({appData, accent}) {
   }
 
   async function dismissCorrection() {
-    // 練習完成，繼續原本的對話流程
-    const currentTurns = turns;
+    // 先把所有需要的值存起來，再清除 state
+    const currentTurns = [...turns];
     const currentCount = turnCount;
+    const currentScenario = scenario;
     setCorrection(null); setCorrectionPhase(null); setPracticeStatus("idle");
     if(currentCount >= MAX_TURNS) {
       await generateFeedback(currentTurns);
       return;
     }
-    await continueConversation(currentTurns, currentCount, scenario);
+    await continueConversation(currentTurns, currentCount, currentScenario);
   }
 
   function speakText(text) {
@@ -760,8 +761,11 @@ function ConversationScreen({appData, accent}) {
                 <div style={{fontSize:"12px",color:"#666"}}>{correction.correctionCn}</div>
                 <button onClick={()=>speakText(correction.correction)} style={{marginTop:"6px",background:"rgba(82,183,136,0.15)",border:"1px solid #52b78844",color:"#52b788",borderRadius:"10px",padding:"4px 12px",fontSize:"11px",cursor:"pointer"}}>🔊 聽發音</button>
               </div>
-              <button onClick={()=>{speakText(correction.correction);setCorrectionPhase("practice");setPracticeStatus("idle");}} style={{width:"100%",background:correction.type==="chinese"?"#52b788":"#e94560",border:"none",color:"#fff",borderRadius:"12px",padding:"11px",fontSize:"14px",cursor:"pointer",fontWeight:"700"}}>
+              <button onClick={()=>{speakText(correction.correction);setCorrectionPhase("practice");setPracticeStatus("idle");}} style={{width:"100%",background:correction.type==="chinese"?"#52b788":"#e94560",border:"none",color:"#fff",borderRadius:"12px",padding:"11px",fontSize:"14px",cursor:"pointer",fontWeight:"700",marginBottom:"8px"}}>
                 🎙️ {correction.type==="chinese"?"學起來，說說看！":"我來說說看！"}
+              </button>
+              <button onClick={dismissCorrection} style={{width:"100%",background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"#666",borderRadius:"12px",padding:"9px",fontSize:"12px",cursor:"pointer"}}>
+                ❌ 這不是我的意思，跳過繼續
               </button>
             </div>
           )}
