@@ -547,12 +547,30 @@ function ConversationScreen({appData, accent}) {
     setAiThinking(true);
 
     // ── 即時糾錯：先檢查這句話有沒有問題 ──
+    const hasChinese = /[一-鿿]/.test(userText);
     let correction = null;
+
+    // 有中文字元 → 直接翻譯，不需要 AI 判斷
+    if (hasChinese) {
+      try {
+        const trRes = await fetch("/api/chat", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({max_tokens:200,
+            messages:[{role:"user", content:`把這句話翻譯成最自然的英文口語，只輸出JSON：
+{"correction":"英文說法","correctionCn":"${userText}","coachComment":"活潑一句話說這個怎麼說（15字內）"}`}]})
+        });
+        const trData = await trRes.json();
+        const trText = trData.content?.[0]?.text || "{}";
+        const trParsed = JSON.parse(trText.replace(/\`\`\`json|\`\`\`/g,"").trim());
+        correction = { hasError: true, type: "chinese", ...trParsed, originalText: userText };
+      } catch(e) {}
+    } else {
     try {
       const checkRes = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({max_tokens:300,
           messages:[{role:"user", content:`你是活潑友善的英文教練。分析這句話：「${userText}」
+${hasChinese ? "【注意：這句話包含中文，必須用情況一處理】" : ""}
 
 情況一：句子裡有中文（可能是中英混雜，例如「I feel 很開心」或純中文「我不知道怎麼說」）
 → 回傳JSON：{"hasError": true, "type": "chinese", "correction": "完整自然的英文說法", "correctionCn": "中文對照", "coachComment": "活潑說明，例如：喔這個用英文超好學！我們會說... 或 這句話native speaker這樣表達！（15字以內）"}
@@ -570,6 +588,7 @@ function ConversationScreen({appData, accent}) {
       const parsed = JSON.parse(checkText.replace(/```json|```/g,"").trim());
       if(parsed.hasError) correction = parsed;
     } catch(e) {}
+    } // end else (no Chinese)
 
     setAiThinking(false);
 
