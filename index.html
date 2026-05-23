@@ -605,8 +605,7 @@ function ConversationScreen({appData, accent}) {
           system: sysPrompt, messages:history})
       });
       const data = await res.json();
-      console.log("chat response:", JSON.stringify(data).slice(0,200));
-      const aiText = data.content?.[0]?.text || data.error || "I see! Tell me more.";
+      const aiText = data.content?.[0]?.text || "I see! Tell me more.";
       let aiCn = "";
       try {
         const tr = await fetch("/api/chat", {
