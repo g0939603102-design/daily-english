@@ -400,6 +400,10 @@ function ConversationScreen({appData, accent}) {
   const [scenario, setScenario] = useState(null);
   const [turns, setTurns] = useState([]); // [{role:"user"|"ai", text, isVoice}]
   const [turnCount, setTurnCount] = useState(0);
+  const [correction, setCorrection] = useState(null); // {hasError, correction, correctionCn, coachComment, originalText}
+  const [correctionPhase, setCorrectionPhase] = useState(null); // show | practice | done
+  const [practiceStatus, setPracticeStatus] = useState("idle"); // idle | listening | success | fail
+  const practiceRecRef = useRef(null);
   const [listening, setListening] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -457,6 +461,39 @@ function ConversationScreen({appData, accent}) {
     }
   }
 
+  function startCorrectionPractice() {
+    const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR) return;
+    if(practiceRecRef.current){try{practiceRecRef.current.abort();}catch(e){}}
+    setPracticeStatus("listening");
+    const rec = new SR(); practiceRecRef.current = rec;
+    rec.lang="en-US"; rec.interimResults=false; rec.maxAlternatives=5;
+    rec.onresult=(e)=>{
+      const heard = Array.from({length:e.results.length},(_,i)=>
+        Array.from({length:e.results[i].length},(_,j)=>e.results[i][j].transcript)
+      ).flat();
+      const target = correction?.correction || "";
+      const ok = heard.some(h => strictMatch(h, target));
+      setPracticeStatus(ok ? "success" : "fail");
+      if(ok) playVictorySound();
+    };
+    rec.onerror=()=>setPracticeStatus("fail");
+    rec.onend=()=>{ setPracticeStatus(s => s==="listening" ? "fail" : s); };
+    try{rec.start();}catch(e){setPracticeStatus("fail");}
+  }
+
+  async function dismissCorrection() {
+    // 練習完成，繼續原本的對話流程
+    const currentTurns = turns;
+    const currentCount = turnCount;
+    setCorrection(null); setCorrectionPhase(null); setPracticeStatus("idle");
+    if(currentCount >= MAX_TURNS) {
+      await generateFeedback(currentTurns);
+      return;
+    }
+    await continueConversation(currentTurns, currentCount);
+  }
+
   function speakText(text) {
     if(!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
@@ -506,16 +543,57 @@ function ConversationScreen({appData, accent}) {
     setTurns(newTurns);
     const newCount = turnCount + 1;
     setTurnCount(newCount);
+    setAiThinking(true);
+
+    // ── 即時糾錯：先檢查這句話有沒有問題 ──
+    let correction = null;
+    try {
+      const checkRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:300,
+          messages:[{role:"user", content:`你是活潑友善的英文教練。分析這句話：「${userText}」
+
+情況一：句子裡有中文（可能是中英混雜，例如「I feel 很開心」或純中文「我不知道怎麼說」）
+→ 回傳JSON：{"hasError": true, "type": "chinese", "correction": "完整自然的英文說法", "correctionCn": "中文對照", "coachComment": "活潑說明，例如：喔這個用英文超好學！我們會說... 或 這句話native speaker這樣表達！（15字以內）"}
+
+情況二：純英文但不自然或有錯誤
+→ 回傳JSON：{"hasError": true, "type": "error", "correction": "正確自然的英文說法", "correctionCn": "中文翻譯", "coachComment": "活潑口語說明，例如：哎呀這樣說怪怪的！或 差一點點！（15字以內）"}
+
+情況三：純英文且完全正確自然
+→ 回傳：{"hasError": false}
+
+只輸出JSON，不要其他文字。`}]})
+      });
+      const checkData = await checkRes.json();
+      const checkText = checkData.content?.[0]?.text || "{}";
+      const parsed = JSON.parse(checkText.replace(/```json|```/g,"").trim());
+      if(parsed.hasError) correction = parsed;
+    } catch(e) {}
+
+    setAiThinking(false);
+
+    // 有錯誤 → 進入糾錯練習模式，暫停對話
+    if(correction) {
+      setCorrection({...correction, originalText: userText});
+      setCorrectionPhase("show"); // show | practice | done
+      return;
+    }
+
+    // 沒錯誤 → 繼續對話
     if(newCount >= MAX_TURNS) {
       await generateFeedback(newTurns);
       return;
     }
+    await continueConversation(newTurns, newCount);
+  }
+
+  async function continueConversation(currentTurns, currentCount) {
     setAiThinking(true);
     try {
-      const history = newTurns.map(t=>({role:t.role==="ai"?"assistant":"user", content:t.text}));
+      const history = currentTurns.map(t=>({role:t.role==="ai"?"assistant":"user", content:t.text}));
       const sysPrompt = `你是英文對話練習夥伴。場景：${scenario?.scenario} 任務：${scenario?.task}
 用自然的口語英文回應，1-3句話，根據對方說的內容自然推進對話。
-第${newCount}輪（共${MAX_TURNS}輪），快到最後時自然收尾。
+第${currentCount}輪（共${MAX_TURNS}輪），快到最後時自然收尾。
 只說英文，不加解釋。`;
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST", headers:{"Content-Type":"application/json"},
@@ -524,7 +602,6 @@ function ConversationScreen({appData, accent}) {
       });
       const data = await res.json();
       const aiText = data.content?.[0]?.text || "I see! Tell me more.";
-      // 翻譯 AI 回應
       let aiCn = "";
       try {
         const tr = await fetch("https://api.anthropic.com/v1/messages", {
@@ -573,6 +650,7 @@ function ConversationScreen({appData, accent}) {
   function reset() {
     setPhase("intro"); setScenario(null); setTurns([]);
     setTurnCount(0); setFeedback(null); setListenError("");
+    setCorrection(null); setCorrectionPhase(null); setPracticeStatus("idle");
   }
 
   const scoreColor = {"A":"#52b788","B":"#4a9eda","C":"#f5a623","D":"#e94560"};
@@ -660,15 +738,82 @@ function ConversationScreen({appData, accent}) {
         )}
         <div ref={bottomRef}/>
       </div>
+      {/* ── 即時糾錯面板 ── */}
+      {correctionPhase&&correction&&(
+        <div style={{padding:"12px 14px",background:"#1a0a0a",borderTop:"2px solid #e94560",flexShrink:0}}>
+          {correctionPhase==="show"&&(
+            <div>
+              <div style={{fontSize:"13px",color:"#f5a623",marginBottom:"8px",fontWeight:"700"}}>
+                {correction.type==="chinese" ? "🇺🇸" : "💬"} {correction.coachComment}
+              </div>
+              <div style={{background:"rgba(233,69,96,0.1)",border:"1px solid #e9456033",borderRadius:"10px",padding:"10px 12px",marginBottom:"8px"}}>
+                <div style={{fontSize:"10px",color:"#e94560",letterSpacing:"2px",marginBottom:"4px"}}>{correction.type==="chinese"?"你想說的":"你說的"}</div>
+                <div style={{fontSize:"13px",color:correction.type==="chinese"?"#ccc":"#aaa",textDecoration:correction.type==="chinese"?"none":"line-through"}}>{correction.originalText}</div>
+              </div>
+              <div style={{background:"rgba(82,183,136,0.1)",border:"1px solid #52b78833",borderRadius:"10px",padding:"10px 12px",marginBottom:"12px"}}>
+                <div style={{fontSize:"10px",color:"#52b788",letterSpacing:"2px",marginBottom:"4px"}}>{correction.type==="chinese"?"英文這樣說 🎯":"應該這樣說"}</div>
+                <div style={{fontSize:"15px",color:"#fff",fontWeight:"700",marginBottom:"2px"}}>{correction.correction}</div>
+                <div style={{fontSize:"12px",color:"#666"}}>{correction.correctionCn}</div>
+                <button onClick={()=>speakText(correction.correction)} style={{marginTop:"6px",background:"rgba(82,183,136,0.15)",border:"1px solid #52b78844",color:"#52b788",borderRadius:"10px",padding:"4px 12px",fontSize:"11px",cursor:"pointer"}}>🔊 聽發音</button>
+              </div>
+              <button onClick={()=>{speakText(correction.correction);setCorrectionPhase("practice");setPracticeStatus("idle");}} style={{width:"100%",background:correction.type==="chinese"?"#52b788":"#e94560",border:"none",color:"#fff",borderRadius:"12px",padding:"11px",fontSize:"14px",cursor:"pointer",fontWeight:"700"}}>
+                🎙️ {correction.type==="chinese"?"學起來，說說看！":"我來說說看！"}
+              </button>
+            </div>
+          )}
+          {correctionPhase==="practice"&&(
+            <div>
+              <div style={{fontSize:"12px",color:"#888",marginBottom:"8px",textAlign:"center"}}>跟著說一遍：</div>
+              <div style={{fontSize:"16px",color:"#fff",fontWeight:"700",textAlign:"center",marginBottom:"12px",padding:"10px",background:"rgba(255,255,255,0.05)",borderRadius:"10px"}}>
+                {correction.correction}
+              </div>
+              {practiceStatus==="idle"&&(
+                <button onClick={startCorrectionPractice} style={{width:"100%",background:"#e94560",border:"none",color:"#fff",borderRadius:"12px",padding:"11px",fontSize:"14px",cursor:"pointer",fontWeight:"700"}}>
+                  🎙️ 開始說
+                </button>
+              )}
+              {practiceStatus==="listening"&&(
+                <div style={{textAlign:"center",padding:"10px"}}>
+                  <div style={{fontSize:"22px",marginBottom:"4px"}}>🔴</div>
+                  <div style={{fontSize:"13px",color:"#f5a623"}}>聆聽中...</div>
+                </div>
+              )}
+              {practiceStatus==="success"&&(
+                <div>
+                  <div style={{textAlign:"center",padding:"8px",marginBottom:"8px"}}>
+                    <div style={{fontSize:"28px"}}>✅</div>
+                    <div style={{fontSize:"14px",color:"#52b788",fontWeight:"700"}}>完美！記住這個說法！</div>
+                  </div>
+                  <button onClick={dismissCorrection} style={{width:"100%",background:"#52b788",border:"none",color:"#fff",borderRadius:"12px",padding:"11px",fontSize:"14px",cursor:"pointer",fontWeight:"700"}}>
+                    繼續對話 →
+                  </button>
+                </div>
+              )}
+              {practiceStatus==="fail"&&(
+                <div>
+                  <div style={{textAlign:"center",padding:"8px",marginBottom:"8px"}}>
+                    <div style={{fontSize:"22px"}}>❌</div>
+                    <div style={{fontSize:"12px",color:"#e94560"}}>再試一次！</div>
+                  </div>
+                  <div style={{display:"flex",gap:"8px"}}>
+                    <button onClick={()=>{setPracticeStatus("idle");}} style={{flex:1,background:"#e94560",border:"none",color:"#fff",borderRadius:"12px",padding:"10px",fontSize:"13px",cursor:"pointer",fontWeight:"700"}}>🎙️ 再說</button>
+                    <button onClick={dismissCorrection} style={{flex:1,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#888",borderRadius:"12px",padding:"10px",fontSize:"13px",cursor:"pointer"}}>跳過，繼續</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       {/* 輸入區 */}
       <div style={{padding:"12px 14px",borderTop:`1px solid ${accent}22`,flexShrink:0}}>
         {listenError&&<div style={{fontSize:"12px",color:"#f5a623",marginBottom:"8px",textAlign:"center"}}>{listenError}</div>}
-        {!listening&&!aiThinking&&(
+        {!listening&&!aiThinking&&!correctionPhase&&(
           <button onClick={startListening} style={{width:"100%",background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"14px",fontSize:"15px",cursor:"pointer",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
             🎙️ 說話
           </button>
         )}
-        {listening&&(
+        {listening&&!correctionPhase&&(
           <div style={{textAlign:"center",padding:"14px"}}>
             <div style={{fontSize:"28px",marginBottom:"4px"}}>🔴</div>
             <div style={{fontSize:"13px",color:"#f5a623"}}>聆聽中，說完會自動停止...</div>
