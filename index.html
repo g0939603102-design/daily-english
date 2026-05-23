@@ -120,13 +120,33 @@ function strictMatch(heard,target) {
   const norm=s=>s.toLowerCase().replace(/[^a-z\s]/g,"").trim();
   const h=norm(heard),t=norm(target);
   if(h===t) return true;
-  const tw=t.split(" "),hw=h.split(" ");
-  if(tw.length>1) return tw.every(tw=>hw.some(hw=>hw===tw));
-  if(Math.abs(h.length-t.length)>2) return false;
+
+  // 包含關係：聽到的包含目標字（或目標字包含在聽到的裡面）
+  if(h.includes(t)||t.includes(h)) return true;
+
+  const tw=t.split(" "), hw=h.split(" ");
+
+  // 多個單字：目標的每個字都出現在聽到的話裡（允許順序不同）
+  if(tw.length>1){
+    const matchCount=tw.filter(tw=>hw.some(hw=>{
+      if(hw===tw) return true;
+      // 允許每個字有最多2個字母的差異
+      if(Math.abs(hw.length-tw.length)>2) return false;
+      let d=0;
+      const s=hw.length<tw.length?hw:tw, l=hw.length<tw.length?tw:hw;
+      for(let i=0;i<s.length;i++) if(s[i]!==l[i]) d++;
+      return (d+l.length-s.length)<=2;
+    })).length;
+    // 超過70%的字匹配就算對
+    return matchCount/tw.length>=0.7;
+  }
+
+  // 單字：允許最多2個字母差異（比原本的1個寬鬆）
+  if(Math.abs(h.length-t.length)>3) return false;
   let diff=0;
-  const s=h.length<t.length?h:t,l=h.length<t.length?t:h;
+  const s=h.length<t.length?h:t, l=h.length<t.length?t:h;
   for(let i=0;i<s.length;i++) if(s[i]!==l[i]) diff++;
-  return (diff+l.length-s.length)<=1;
+  return (diff+l.length-s.length)<=2;
 }
 function playVictorySound() {
   try {
@@ -482,8 +502,13 @@ function ConversationScreen({appData, accent}) {
         Array.from({length:e.results[i].length},(_,j)=>e.results[i][j].transcript)
       ).flat();
       const target = correction?.correction || "";
+      // 用寬鬆比對：任何一個辨識結果跟目標夠像就算對
       const ok = heard.some(h => strictMatch(h, target));
-      setPracticeStatus(ok ? "success" : "fail");
+      // 額外：如果目標的主要單字都有出現，也算對
+      const targetWords = target.toLowerCase().replace(/[^a-z\s]/g,"").split(" ").filter(w=>w.length>2);
+      const heardAll = heard.join(" ").toLowerCase();
+      const keyWordsMatch = targetWords.length>0 && targetWords.filter(w=>heardAll.includes(w)).length/targetWords.length>=0.7;
+      setPracticeStatus((ok||keyWordsMatch) ? "success" : "fail");
       if(ok) playVictorySound();
     };
     rec.onerror=()=>setPracticeStatus("fail");
@@ -515,26 +540,50 @@ function ConversationScreen({appData, accent}) {
     window.speechSynthesis.speak(u);
   }
 
-  function startListening() {
-    const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){setListenError("請用Chrome瀏覽器");return;}
-    if(recRef.current){try{recRef.current.abort();}catch(e){}}
-    setListening(true); setListenError(""); gotRef.current=false;
-    const rec = new SR(); recRef.current=rec;
-    rec.lang="zh-TW"; rec.interimResults=false; rec.maxAlternatives=5;
-    rec.onresult=(e)=>{
-      gotRef.current=true;
-      const text = e.results[0][0].transcript;
+  async function startListening() {
+    setListening(true); setListenError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      const chunks = [];
+      mediaRecorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: mimeType });
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64 = reader.result.split(',')[1];
+          try {
+            const res = await fetch('/api/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ useWhisper: true, audioBase64: base64 })
+            });
+            const data = await res.json();
+            const text = data.transcript || '';
+            setListening(false);
+            if(text.trim()) {
+              handleUserSay(text);
+            } else {
+              setListenError("沒聽清楚，請再試一次");
+            }
+          } catch(e) {
+            setListening(false);
+            setListenError("辨識失敗，請再試");
+          }
+        };
+        reader.readAsDataURL(blob);
+      };
+      recRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setTimeout(() => {
+        if(mediaRecorder.state === 'recording') mediaRecorder.stop();
+      }, 6000);
+    } catch(e) {
       setListening(false);
-      handleUserSay(text);
-    };
-    rec.onerror=(e)=>{
-      gotRef.current=true; setListening(false);
-      if(e.error==="not-allowed") setListenError("請允許麥克風");
-      else setListenError("沒聽到，請再試");
-    };
-    rec.onend=()=>{ if(!gotRef.current){setListening(false);setListenError("沒收到語音，請靠近麥克風");} };
-    try{rec.start();}catch(e){setListening(false);setListenError("無法啟動麥克風");}
+      setListenError("請允許麥克風權限");
+    }
   }
 
   async function handleUserSay(userText) {
@@ -860,8 +909,8 @@ Rules:
         {listening&&!correctionPhase&&(
           <div style={{textAlign:"center",padding:"14px"}}>
             <div style={{fontSize:"28px",marginBottom:"4px"}}>🔴</div>
-            <div style={{fontSize:"13px",color:"#f5a623"}}>聆聽中，說完會自動停止...</div>
-            <button onClick={()=>{if(recRef.current)recRef.current.abort();setListening(false);}} style={{marginTop:"8px",background:"none",border:"1px solid #555",color:"#777",borderRadius:"10px",padding:"4px 14px",fontSize:"12px",cursor:"pointer"}}>取消</button>
+            <div style={{fontSize:"13px",color:"#f5a623"}}>錄音中（最多5秒）... 說完按「完成」</div>
+            <button onClick={()=>{if(recRef.current&&recRef.current.state==="recording")recRef.current.stop();setListening(false);}} style={{marginTop:"8px",background:"none",border:"1px solid #555",color:"#777",borderRadius:"10px",padding:"4px 14px",fontSize:"12px",cursor:"pointer"}}>完成</button>
           </div>
         )}
         {aiThinking&&(
