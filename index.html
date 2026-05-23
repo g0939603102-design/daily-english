@@ -435,11 +435,47 @@ function ConversationScreen({appData, accent}) {
     const level = totalWords < 300 ? "beginner" : totalWords < 500 ? "elementary" : "intermediate";
     const useWordBound = Math.random() > 0.5;
     const recentWords = appData?.seenWords?.slice(-5)?.join(", ") || "";
+
+    // 30種生活化場景，每次隨機挑一個給 AI 參考
+    const scenarioIdeas = [
+      "朋友傳訊說想去新開的咖啡廳，問你要不要一起",
+      "朋友說他今天超累，問你周末要不要去按摩",
+      "朋友說聽說你最近在學英文，想知道你怎麼練習的",
+      "朋友說他剛看完一部很好看的劇，強力推薦你看",
+      "朋友說他想換工作，問你覺得他適不適合創業",
+      "朋友說他男/女朋友最近很奇怪，一直沒回訊息",
+      "朋友問你最近有沒有去哪裡玩，他想找地方旅遊",
+      "朋友說他想買新手機，問你用哪支比較好",
+      "朋友問你有沒有推薦的運動，他最近想開始健身",
+      "朋友說他昨晚睡不好，問你有什麼助眠方法",
+      "朋友說他想學做菜，問你有沒有簡單的食譜",
+      "朋友問你週末要不要去夜市，他想吃小吃",
+      "朋友說公司同事很難相處，跟你抱怨",
+      "朋友說他在考慮養一隻貓，問你養貓的感覺怎麼樣",
+      "朋友問你最喜歡聽什麼音樂，想讓你推薦歌單",
+      "朋友說他搭捷運遇到很奇怪的人，想跟你說這件事",
+      "朋友說他剛跑完步，問你有沒有在運動",
+      "朋友問你有沒有看最近很紅的電影",
+      "朋友說他想整理房間，問你有沒有斷捨離心得",
+      "朋友說他想學一個新技能，問你最近在學什麼",
+      "朋友問你平常吃早餐嗎，他在研究健康飲食",
+      "朋友說他剛換新工作，第一天超緊張",
+      "朋友問你有沒有在用什麼 App，他想找新東西用",
+      "朋友說他下週要去日本玩，問你有沒有推薦",
+      "朋友說他剛吃了一家超好吃的餐廳，想帶你去",
+      "朋友問你有沒有在追什麼劇，他最近沒劇看",
+      "朋友說他考慮報名線上課程，問你有沒有學習心得",
+      "朋友說他最近壓力很大，想找你聊聊",
+      "朋友問你週末早上都在做什麼，他想找人一起晨跑",
+      "朋友說他剛買了一個東西覺得很值得，興奮地跟你分享",
+    ];
+    const randomIdea = scenarioIdeas[Math.floor(Math.random() * scenarioIdeas.length)];
+
     const prompt = useWordBound && recentWords
-      ? `為台灣英文學習者設計一個超生活化的對話場景，融入這些單字：${recentWords}。
-用JSON回答：{"scenario":"場景（中文1句）","task":"任務（中文1句，要具體）","opening":"開場白（英文1句，像朋友傳訊息，口語簡短，最多10個字）","targetWords":["${recentWords.split(",")[0]?.trim()}"]}`
-      : `為台灣英文學習者設計一個超生活化的對話場景（朋友聚會/週末計劃/吃飯/購物/旅遊）。
-用JSON回答：{"scenario":"場景（中文1句）","task":"任務（中文1句，要具體）","opening":"開場白（英文1句，像朋友傳訊息，口語簡短，最多10個字）","targetWords":[]}`;
+      ? `為台灣英文學習者設計一個生活化對話場景，情境是：${randomIdea}，並自然融入這些單字：${recentWords}。
+只輸出JSON，不要其他文字：{"scenario":"場景說明（中文1句）","task":"學習者的任務（中文1句，具體說要做什麼）","opening":"朋友的開場白（英文，像真實朋友傳訊息，口語自然，10-15字）","openingCn":"開場白的中文翻譯","targetWords":["${recentWords.split(",")[0]?.trim()}"]}`
+      : `為台灣英文學習者設計一個生活化對話場景，情境是：${randomIdea}。
+只輸出JSON，不要其他文字：{"scenario":"場景說明（中文1句）","task":"學習者的任務（中文1句，具體說要做什麼，例如：表達你的意見並問對方細節）","opening":"朋友的開場白（英文，像真實朋友傳訊息，口語自然，10-15字）","openingCn":"開場白的中文翻譯","targetWords":[]}`;
     try {
       const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
@@ -449,24 +485,37 @@ function ConversationScreen({appData, accent}) {
       const text = data.content?.[0]?.text || "";
       const clean = text.replace(/```json|```/g,"").trim();
       const parsed = JSON.parse(clean);
-      let openingCn = "";
-      try {
-        const tr = await fetch("/api/chat", {
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({max_tokens:100, messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${parsed.opening}`}]})
-        });
-        const td = await tr.json();
-        openingCn = td.content?.[0]?.text || "";
-      } catch(e) {}
+      // 優先用 AI 回傳的 openingCn，沒有才另外翻譯
+      let openingCn = parsed.openingCn || "";
+      if (!openingCn) {
+        try {
+          const tr = await fetch("/api/chat", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({max_tokens:100, messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${parsed.opening}`}]})
+          });
+          const td = await tr.json();
+          openingCn = td.content?.[0]?.text || "";
+        } catch(e) {}
+      }
       setScenario(parsed);
       setTurns([{role:"ai", text: parsed.opening, cn: openingCn}]);
       speakText(parsed.opening);
       setPhase("talking");
     } catch(e) {
-      const fallbackOpening = "Hey! Are you free this weekend? I was thinking we could grab some food!";
-      setScenario({scenario:"朋友邀你週末出去吃飯，但你已有計劃。", task:"用英文婉拒並提議改期。", opening:fallbackOpening, targetWords:[]});
-      setTurns([{role:"ai", text:fallbackOpening, cn:"嘿！你這週末有空嗎？我在想我們可以去吃個飯！"}]);
-      speakText(fallbackOpening);
+      // fallback 也改成隨機，不再每次同一句
+      const fallbacks = [
+        {opening:"Omg I just found this amazing ramen place, wanna check it out?", cn:"天啊我剛發現一家超棒的拉麵店，要不要去看看？", scenario:"朋友發現一家新餐廳，邀你一起去。", task:"表達你的興趣並問對方更多細節。"},
+        {opening:"Hey, you been sleeping okay lately? I've been so tired.", cn:"嘿，你最近睡得還好嗎？我一直好累。", scenario:"朋友說他最近睡眠狀況不好。", task:"關心對方，並分享自己的睡眠狀況。"},
+        {opening:"Dude, I'm thinking of getting a dog. Too crazy?", cn:"老兄，我在考慮養一隻狗，太瘋狂了嗎？", scenario:"朋友說他想養狗，想聽你的意見。", task:"給出你的看法，並問他有沒有準備好了。"},
+        {opening:"I just started watching this show and I can't stop!", cn:"我剛開始看一部劇然後就停不下來了！", scenario:"朋友瘋狂追一部新劇。", task:"問他在看什麼，表達你的好奇或興趣。"},
+        {opening:"Ugh, work has been so stressful this week, you okay?", cn:"唉，這週工作壓力好大，你還好嗎？", scenario:"朋友這週工作壓力很大，想跟你聊聊。", task:"安慰對方，分享你自己的壓力管理方式。"},
+        {opening:"Hey are you free Saturday morning? Wanna go for a walk?", cn:"嘿，你週六早上有空嗎？要不要去散步？", scenario:"朋友想約你週六早上一起去散步。", task:"回應邀請，如果沒空就婉拒並另約時間。"},
+        {opening:"I'm thinking of cutting my hair short, should I do it?", cn:"我在考慮剪短髮，我應該剪嗎？", scenario:"朋友在考慮改變髮型，想聽你的意見。", task:"給出你的真實意見，並問他為什麼想改變。"},
+      ];
+      const f = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      setScenario({scenario: f.scenario, task: f.task, opening: f.opening, targetWords:[]});
+      setTurns([{role:"ai", text: f.opening, cn: f.cn}]);
+      speakText(f.opening);
       setPhase("talking");
     }
   }
