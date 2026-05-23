@@ -566,7 +566,7 @@ function ConversationScreen({appData, accent}) {
             if(text.trim()) {
               handleUserSay(text);
             } else {
-              setListenError("沒聽清楚，請再試一次");
+              setListenError(data.error ? "錯誤：" + data.error.slice(0,80) : "沒聽清楚，請再試");
             }
           } catch(e) {
             setListening(false);
