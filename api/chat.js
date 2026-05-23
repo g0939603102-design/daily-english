@@ -7,7 +7,6 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
 
-  const OPENAI_API_KEY = "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";
   const { messages, system, max_tokens, useWhisper, audioBase64, mimeType } = req.body;
 
   if (useWhisper && audioBase64) {
@@ -26,7 +25,7 @@ export default async function handler(req, res) {
       const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
           'Content-Type': `multipart/form-data; boundary=${boundary}`,
         },
         body,
