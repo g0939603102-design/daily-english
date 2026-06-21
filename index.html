@@ -8,7 +8,7 @@
 <style>
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
 html, body { height: 100%; }
-body { background: #0a0a0f; font-family: Georgia, serif; color: #f0ede8; display: flex; flex-direction: column; min-height: 100vh; }
+body { background: #0a0a0f; font-family: Georgia, serif; color: #f0ede8; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
 button { font-family: inherit; }
 @keyframes fadeInRight { from { opacity:0; transform:translateX(16px); } to { opacity:1; transform:translateX(0); } }
 @keyframes fadeInLeft  { from { opacity:0; transform:translateX(-16px); } to { opacity:1; transform:translateX(0); } }
@@ -614,9 +614,7 @@ function ConversationScreen({appData, accent}) {
       };
       recRef.current = mediaRecorder;
       mediaRecorder.start();
-      setTimeout(() => {
-        if(mediaRecorder.state === 'recording') mediaRecorder.stop();
-      }, 6000);
+      // 不設自動停止時間，完全由用戶按「完成」結束錄音，給予充分思考時間
     } catch(e) {
       setListening(false);
       setListenError("請允許麥克風權限");
@@ -965,7 +963,7 @@ ${dialogue}
         {listening&&!correctionPhase&&(
           <div style={{textAlign:"center",padding:"14px"}}>
             <div style={{fontSize:"28px",marginBottom:"4px"}}>🔴</div>
-            <div style={{fontSize:"13px",color:"#f5a623"}}>錄音中（最多6秒）... 說完按「完成」</div>
+            <div style={{fontSize:"13px",color:"#f5a623"}}>錄音中... 慢慢想，說完按「完成」</div>
             <button onClick={()=>{if(recRef.current&&recRef.current.state==="recording")recRef.current.stop();setListening(false);}} style={{marginTop:"8px",background:"none",border:"1px solid #555",color:"#777",borderRadius:"10px",padding:"4px 14px",fontSize:"12px",cursor:"pointer"}}>完成</button>
           </div>
         )}
@@ -1067,7 +1065,7 @@ function FreeChatScreen({appData, accent}) {
       };
       recRef.current = mediaRecorder;
       mediaRecorder.start();
-      setTimeout(() => { if(mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 8000);
+      // 不設自動停止時間，完全由用戶按「完成」結束錄音，給予充分思考時間
     } catch(e) { setListening(false); setListenError("請允許麥克風權限"); }
   }
 
@@ -1361,7 +1359,7 @@ Output STRICT JSON only, no extra text:
             {listening&&(
               <div style={{textAlign:"center",padding:"14px"}}>
                 <div style={{fontSize:"28px",marginBottom:"4px"}}>🔴</div>
-                <div style={{fontSize:"13px",color:"#f5a623"}}>錄音中（最多8秒）... 說完按「完成」</div>
+                <div style={{fontSize:"13px",color:"#f5a623"}}>錄音中... 慢慢想，說完按「完成」</div>
                 <button onClick={()=>{if(recRef.current&&recRef.current.state==="recording")recRef.current.stop();setListening(false);}} style={{marginTop:"8px",background:"none",border:"1px solid #555",color:"#777",borderRadius:"10px",padding:"4px 14px",fontSize:"12px",cursor:"pointer"}}>完成</button>
               </div>
             )}
