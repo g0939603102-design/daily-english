@@ -976,6 +976,349 @@ ${dialogue}
     </div>
   );
 }
+// ── 自由聊天：每日新字進度 ──
+function getFreeChatProgressKey() { return "freechat_progress_" + getToday(); }
+function loadFreeChatProgress() {
+  try {
+    const r = localStorage.getItem(getFreeChatProgressKey());
+    if (r) return JSON.parse(r);
+  } catch(e) {}
+  return { count: 0, words: [] };
+}
+function saveFreeChatProgress(p) {
+  try { localStorage.setItem(getFreeChatProgressKey(), JSON.stringify(p)); } catch(e) {}
+}
+
+// ── 自由聊天模組 ──
+function FreeChatScreen({appData, accent}) {
+  const [started, setStarted] = useState(false);
+  const [turns, setTurns] = useState([]);
+  const [aiThinking, setAiThinking] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [listenError, setListenError] = useState("");
+  const [inputMode, setInputMode] = useState("voice"); // voice | text
+  const [textInput, setTextInput] = useState("");
+  const [progress, setProgress] = useState(loadFreeChatProgress());
+  const [zhHelp, setZhHelp] = useState(null); // {original, correction, correctionCn}
+  const [newWordCard, setNewWordCard] = useState(null); // {word, meaning, note}
+  const [showRecap, setShowRecap] = useState(false);
+  const recRef = useRef(null);
+  const bottomRef = useRef(null);
+  const DAILY_TARGET = 5;
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [turns, aiThinking, newWordCard, zhHelp]);
+
+  function speakText(text) {
+    if(!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang="en-US"; u.rate=0.88;
+    const voices = window.speechSynthesis.getVoices();
+    const v = voices.find(v=>v.lang==="en-US")||voices.find(v=>v.lang.startsWith("en"));
+    if(v) u.voice=v;
+    window.speechSynthesis.speak(u);
+  }
+
+  const OPENERS = [
+    "Hey! What's on your mind today?",
+    "Hi there! How's your day going so far?",
+    "Hey, anything fun happen today?",
+    "What's up! Got any plans later?",
+    "Hi! What have you been up to lately?",
+    "Hey, how are you feeling today?",
+    "What's new with you?",
+    "Hi! Anything interesting on your mind?",
+  ];
+
+  function startChat() {
+    const opener = OPENERS[Math.floor(Math.random() * OPENERS.length)];
+    setStarted(true);
+    setTurns([{role:"ai", text:opener, cn:""}]);
+    speakText(opener);
+  }
+
+  async function startListening() {
+    setListening(true); setListenError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      const chunks = [];
+      mediaRecorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: mimeType });
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64 = reader.result.split(',')[1];
+          try {
+            const res = await fetch('/api/chat', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ useWhisper: true, audioBase64: base64, mimeType })
+            });
+            const data = await res.json();
+            const text = data.transcript || '';
+            setListening(false);
+            if(text.trim()) { handleUserMessage(text); }
+            else { setListenError(data.error ? "錯誤：" + data.error.slice(0,80) : "沒聽清楚，請再試"); }
+          } catch(e) { setListening(false); setListenError("辨識失敗，請再試"); }
+        };
+        reader.readAsDataURL(blob);
+      };
+      recRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setTimeout(() => { if(mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 8000);
+    } catch(e) { setListening(false); setListenError("請允許麥克風權限"); }
+  }
+
+  function handleTextSubmit() {
+    if(!textInput.trim()) return;
+    const text = textInput.trim();
+    setTextInput("");
+    handleUserMessage(text);
+  }
+
+  // 處理用戶說的中文 → 翻譯成英文教學
+  async function handleChineseInput(userText) {
+    setAiThinking(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({max_tokens:200, messages:[{role:"user", content:
+          `把這句話翻譯成最自然、最口語的英文，只輸出純JSON，不要其他文字：
+{"correction":"自然的英文說法","correctionCn":"${userText}"}
+原句：${userText}`}]})
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "{}";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {correction:userText, correctionCn:userText};
+      setZhHelp({ original: userText, correction: parsed.correction, correctionCn: parsed.correctionCn });
+      speakText(parsed.correction);
+    } catch(e) {
+      setZhHelp({ original: userText, correction: userText, correctionCn: userText });
+    }
+    setAiThinking(false);
+  }
+
+  // 中文翻譯確認後，用英文版本繼續對話
+  function confirmZhHelp() {
+    const englishVersion = zhHelp.correction;
+    setZhHelp(null);
+    submitToConversation(englishVersion, zhHelp.correctionCn);
+  }
+
+  async function handleUserMessage(userText) {
+    const hasChinese = /[一-鿿]/.test(userText);
+    if (hasChinese) {
+      await handleChineseInput(userText);
+      return;
+    }
+    await submitToConversation(userText, "");
+  }
+
+  async function submitToConversation(userText, userCn) {
+    let translatedCn = userCn;
+    if (!translatedCn) {
+      try {
+        const tr = await fetch("/api/chat", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({max_tokens:100, messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${userText}`}]})
+        });
+        const td = await tr.json();
+        translatedCn = td.content?.[0]?.text || "";
+      } catch(e) {}
+    }
+    const newTurns = [...turns, {role:"user", text:userText, cn:translatedCn}];
+    setTurns(newTurns);
+    setAiThinking(true);
+
+    const currentProgress = loadFreeChatProgress();
+    const shouldTeachNewWord = currentProgress.count < DAILY_TARGET;
+    const learnedWords = (appData?.seenWords || []).slice(-30);
+
+    try {
+      const allHistory = newTurns.map(t=>({role:t.role==="ai"?"assistant":"user", content:t.text}));
+      const sysPrompt = `You are Jamie, a warm and curious Taiwanese-American friend chatting casually in English over text.
+
+Rules:
+- This is free-flowing conversation — topics can shift naturally, no fixed scenario.
+- React naturally and stay consistent with everything said before (never contradict yourself).
+- Max 1-2 sentences, under 18 words. Use contractions: I'm, can't, wanna, gonna.
+- Sometimes ask a short follow-up, sometimes just react.
+- English only, zero formal language.
+${shouldTeachNewWord ? `- Try to naturally introduce ONE useful new English word or short phrase that fits the conversation (avoid these already-learned ones: ${learnedWords.join(", ") || "none"}). If you do, return it in the newWord field below.` : `- Don't introduce any new vocabulary right now, the user already hit today's word goal.`}
+
+Output STRICT JSON only, no extra text:
+{"reply":"your English reply","replyCn":"繁體中文翻譯","newWord": ${shouldTeachNewWord ? '{"word":"the new word or phrase","meaning":"中文意思","note":"一句話講怎麼用，活潑口語"} or null if you did not introduce one this turn' : 'null'}}`;
+
+      const res = await fetch("/api/chat", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({max_tokens:300, system: sysPrompt, messages: allHistory})
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      let parsed;
+      try { parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { reply: text, replyCn: "", newWord: null }; }
+      catch(e) { parsed = { reply: text || "Haha nice, tell me more!", replyCn: "", newWord: null }; }
+
+      setTurns(prev => [...prev, {role:"ai", text: parsed.reply, cn: parsed.replyCn || ""}]);
+      speakText(parsed.reply);
+
+      if (parsed.newWord && parsed.newWord.word) {
+        const updated = {
+          count: currentProgress.count + 1,
+          words: [...currentProgress.words, parsed.newWord]
+        };
+        saveFreeChatProgress(updated);
+        setProgress(updated);
+        setNewWordCard(parsed.newWord);
+      }
+    } catch(e) {
+      setTurns(prev => [...prev, {role:"ai", text:"Oh that's cool! Tell me more.", cn:"喔那很酷！多說一點。"}]);
+    }
+    setAiThinking(false);
+  }
+
+  function dismissNewWordCard() { setNewWordCard(null); }
+
+  function endChat() {
+    setShowRecap(true);
+  }
+
+  function resetChat() {
+    setStarted(false); setTurns([]); setShowRecap(false);
+    setZhHelp(null); setNewWordCard(null);
+    setProgress(loadFreeChatProgress());
+  }
+
+  if (!started) return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 20px",textAlign:"center"}}>
+      <div style={{fontSize:"52px",marginBottom:"16px"}}>🗨️</div>
+      <div style={{fontSize:"20px",fontWeight:"700",color:"#fff",marginBottom:"8px"}}>自由聊天</div>
+      <div style={{fontSize:"13px",color:"#666",marginBottom:"8px",lineHeight:"1.7"}}>想聊什麼就聊什麼，沒有場景限制<br/>講不出來可以說中文，AI幫你翻譯</div>
+      <div style={{fontSize:"12px",color:"#555",marginBottom:"20px"}}>每天至少學 {DAILY_TARGET} 個新字／片語</div>
+      <div style={{display:"inline-flex",alignItems:"center",gap:"6px",background:`${accent}18`,border:`1px solid ${accent}35`,borderRadius:"14px",padding:"6px 14px",marginBottom:"28px"}}>
+        <span style={{fontSize:"13px"}}>✨</span>
+        <span style={{fontSize:"13px",color:accent,fontWeight:"700"}}>今日新字 {progress.count} / {DAILY_TARGET}</span>
+      </div>
+      <button onClick={startChat} style={{background:accent,border:"none",color:"#fff",borderRadius:"16px",padding:"14px 36px",fontSize:"16px",cursor:"pointer",fontWeight:"700"}}>
+        開始聊天 💬
+      </button>
+    </div>
+  );
+
+  if (showRecap) return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 20px",textAlign:"center"}}>
+      <div style={{fontSize:"52px",marginBottom:"16px"}}>{progress.count >= DAILY_TARGET ? "🎉" : "💪"}</div>
+      <div style={{fontSize:"20px",fontWeight:"700",color:"#fff",marginBottom:"8px"}}>聊天結束！</div>
+      <div style={{fontSize:"14px",color:accent,fontWeight:"700",marginBottom:"20px"}}>今天學了 {progress.count} 個新字／片語</div>
+      {progress.words.length > 0 && (
+        <div style={{width:"100%",maxWidth:"360px",display:"flex",flexDirection:"column",gap:"8px",marginBottom:"28px"}}>
+          {progress.words.map((w,i)=>(
+            <div key={i} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",padding:"10px 14px",textAlign:"left"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:"14px",color:"#fff",fontWeight:"700"}}>{w.word}</span>
+                <button onClick={()=>speakText(w.word)} style={{background:"none",border:"none",color:accent,fontSize:"12px",cursor:"pointer"}}>🔊</button>
+              </div>
+              <div style={{fontSize:"12px",color:"#888",marginTop:"2px"}}>{w.meaning}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <button onClick={resetChat} style={{background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"13px 32px",fontSize:"15px",cursor:"pointer",fontWeight:"700"}}>再聊一次 🔄</button>
+    </div>
+  );
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
+      <div style={{padding:"10px 14px",background:`${accent}11`,borderBottom:`1px solid ${accent}22`,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{fontSize:"12px",color:accent}}>🗨️ 自由聊天</div>
+        <div style={{fontSize:"12px",color: progress.count >= DAILY_TARGET ? "#52b788" : "#888"}}>
+          ✨ 今日新字 {progress.count}/{DAILY_TARGET}{progress.count >= DAILY_TARGET ? " 🎉" : ""}
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"10px"}}>
+        {turns.map((t,i)=>(
+          <div key={i} style={{display:"flex",justifyContent:t.role==="user"?"flex-end":"flex-start",flexDirection:"column",alignItems:t.role==="user"?"flex-end":"flex-start",gap:"3px"}}>
+            <div style={{maxWidth:"82%",padding:"10px 14px",borderRadius:t.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:t.role==="user"?accent:"rgba(255,255,255,0.08)",fontSize:"14px",color:"#fff",lineHeight:"1.6"}}>
+              {t.text}
+              {t.role==="ai"&&(
+                <button onClick={()=>speakText(t.text)} style={{display:"block",marginTop:"4px",background:"none",border:"none",color:`${accent}99`,fontSize:"11px",cursor:"pointer",padding:0}}>🔊 重聽</button>
+              )}
+            </div>
+            {t.cn&&(
+              <div style={{maxWidth:"82%",fontSize:"11px",color:"#666",padding:"0 4px",lineHeight:"1.5",textAlign:t.role==="user"?"right":"left"}}>{t.cn}</div>
+            )}
+          </div>
+        ))}
+        {/* 新字卡片 */}
+        {newWordCard && (
+          <div style={{alignSelf:"center",width:"100%",background:`${accent}15`,border:`1px solid ${accent}44`,borderRadius:"14px",padding:"14px",textAlign:"center"}}>
+            <div style={{fontSize:"10px",letterSpacing:"2px",color:accent,textTransform:"uppercase",marginBottom:"6px"}}>✨ 新字學起來</div>
+            <div style={{fontSize:"18px",color:"#fff",fontWeight:"700",marginBottom:"2px"}}>{newWordCard.word}</div>
+            <div style={{fontSize:"13px",color:"#aaa",marginBottom:"6px"}}>{newWordCard.meaning}</div>
+            {newWordCard.note && <div style={{fontSize:"12px",color:"#888",fontStyle:"italic",marginBottom:"10px"}}>{newWordCard.note}</div>}
+            <div style={{display:"flex",gap:"8px",justifyContent:"center"}}>
+              <button onClick={()=>speakText(newWordCard.word)} style={{background:`${accent}22`,border:`1px solid ${accent}44`,color:accent,borderRadius:"10px",padding:"5px 14px",fontSize:"12px",cursor:"pointer"}}>🔊 聽發音</button>
+              <button onClick={dismissNewWordCard} style={{background:accent,border:"none",color:"#fff",borderRadius:"10px",padding:"5px 16px",fontSize:"12px",cursor:"pointer",fontWeight:"700"}}>記住了！</button>
+            </div>
+          </div>
+        )}
+        {/* 中文翻譯協助卡片 */}
+        {zhHelp && (
+          <div style={{alignSelf:"center",width:"100%",background:"rgba(245,166,35,0.1)",border:"1px solid rgba(245,166,35,0.3)",borderRadius:"14px",padding:"14px"}}>
+            <div style={{fontSize:"10px",letterSpacing:"2px",color:"#f5a623",textTransform:"uppercase",marginBottom:"6px"}}>🇺🇸 英文這樣說</div>
+            <div style={{fontSize:"13px",color:"#999",marginBottom:"6px"}}>你說：{zhHelp.original}</div>
+            <div style={{fontSize:"16px",color:"#fff",fontWeight:"700",marginBottom:"10px"}}>{zhHelp.correction}</div>
+            <div style={{display:"flex",gap:"8px",justifyContent:"center"}}>
+              <button onClick={()=>speakText(zhHelp.correction)} style={{background:"rgba(245,166,35,0.2)",border:"1px solid rgba(245,166,35,0.4)",color:"#f5a623",borderRadius:"10px",padding:"5px 14px",fontSize:"12px",cursor:"pointer"}}>🔊 聽發音</button>
+              <button onClick={confirmZhHelp} style={{background:"#f5a623",border:"none",color:"#fff",borderRadius:"10px",padding:"5px 16px",fontSize:"12px",cursor:"pointer",fontWeight:"700"}}>學起來，繼續聊 →</button>
+            </div>
+          </div>
+        )}
+        {aiThinking&&(
+          <div style={{display:"flex",gap:"5px",padding:"10px 14px"}}>
+            {[0,1,2].map(j=>(<div key={j} style={{width:"7px",height:"7px",borderRadius:"50%",background:accent,animation:"pulse 1.2s infinite",animationDelay:`${j*0.2}s`}}/>))}
+          </div>
+        )}
+        <div ref={bottomRef}/>
+      </div>
+      <div style={{padding:"12px 14px",borderTop:`1px solid ${accent}22`,flexShrink:0}}>
+        {listenError&&<div style={{fontSize:"12px",color:"#f5a623",marginBottom:"8px",textAlign:"center"}}>{listenError}</div>}
+        <div style={{display:"flex",gap:"6px",marginBottom:"8px",justifyContent:"center"}}>
+          <button onClick={()=>setInputMode("voice")} style={{background:inputMode==="voice"?`${accent}22`:"none",border:`1px solid ${inputMode==="voice"?accent:"rgba(255,255,255,0.15)"}`,color:inputMode==="voice"?accent:"#666",borderRadius:"10px",padding:"4px 12px",fontSize:"11px",cursor:"pointer"}}>🎙️ 語音</button>
+          <button onClick={()=>setInputMode("text")} style={{background:inputMode==="text"?`${accent}22`:"none",border:`1px solid ${inputMode==="text"?accent:"rgba(255,255,255,0.15)"}`,color:inputMode==="text"?accent:"#666",borderRadius:"10px",padding:"4px 12px",fontSize:"11px",cursor:"pointer"}}>⌨️ 打字</button>
+        </div>
+        {inputMode==="voice" ? (
+          <>
+            {!listening&&!aiThinking&&!zhHelp&&!newWordCard&&(
+              <div style={{display:"flex",gap:"8px"}}>
+                <button onClick={startListening} style={{flex:1,background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"14px",fontSize:"15px",cursor:"pointer",fontWeight:"700"}}>🎙️ 說話</button>
+                <button onClick={endChat} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#aaa",borderRadius:"14px",padding:"14px 16px",fontSize:"13px",cursor:"pointer",fontWeight:"600",whiteSpace:"nowrap"}}>結束 📊</button>
+              </div>
+            )}
+            {listening&&(
+              <div style={{textAlign:"center",padding:"14px"}}>
+                <div style={{fontSize:"28px",marginBottom:"4px"}}>🔴</div>
+                <div style={{fontSize:"13px",color:"#f5a623"}}>錄音中（最多8秒）... 說完按「完成」</div>
+                <button onClick={()=>{if(recRef.current&&recRef.current.state==="recording")recRef.current.stop();setListening(false);}} style={{marginTop:"8px",background:"none",border:"1px solid #555",color:"#777",borderRadius:"10px",padding:"4px 14px",fontSize:"12px",cursor:"pointer"}}>完成</button>
+              </div>
+            )}
+            {aiThinking&&<div style={{textAlign:"center",padding:"14px",fontSize:"13px",color:"#555"}}>Jamie 回應中...</div>}
+          </>
+        ) : (
+          <div style={{display:"flex",gap:"8px"}}>
+            <input value={textInput} onChange={e=>setTextInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handleTextSubmit();}} placeholder="輸入英文或中文都可以..." style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:"14px",padding:"12px 16px",fontSize:"14px",outline:"none"}}/>
+            <button onClick={handleTextSubmit} disabled={aiThinking} style={{background:accent,border:"none",color:"#fff",borderRadius:"14px",padding:"12px 18px",fontSize:"14px",cursor:"pointer",fontWeight:"700"}}>送出</button>
+            <button onClick={endChat} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#aaa",borderRadius:"14px",padding:"12px 14px",fontSize:"13px",cursor:"pointer"}}>📊</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 function LevelUpModal({level,accent,onClose}) {
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
@@ -1288,10 +1631,16 @@ function App() {
           <ConversationScreen appData={appData} accent={c.accent}/>
         </div>
       )}
+      {activeTab==="freechat"&&(
+        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <FreeChatScreen appData={appData} accent={c.accent}/>
+        </div>
+      )}
       <div style={{borderTop:`1px solid ${c.accent}22`,background:"rgba(0,0,0,0.6)",flexShrink:0,display:"flex",alignItems:"stretch"}}>
         {[
           {id:"learn",label:"學習",emoji:"📚"},
           {id:"chat",  label:"對話",emoji:"💬"},
+          {id:"freechat",  label:"聊天",emoji:"🗨️"},
         ].map(tab=>(
           <button key={tab.id} onClick={()=>{ setActiveTab(tab.id); }} style={{flex:1,padding:"10px 6px 8px",background:"none",border:"none",color:activeTab===tab.id?c.accent:"#555",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",transition:"color 0.2s"}}>
             <span style={{fontSize:"20px"}}>{tab.emoji}</span>
