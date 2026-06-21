@@ -20,7 +20,7 @@ button { font-family: inherit; }
 </style>
 </head>
 <body>
-<div id="root" style="display:flex;flex-direction:column;min-height:100vh;"></div>
+<div id="root" style="display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden;"></div>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
@@ -380,7 +380,7 @@ function ReviewScreen({reviews, accent, onDone}) {
 function SetupScreen({onComplete}) {
   const [topic,setTopic]=useState(null);
   return(
-    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0a0a0f,#12121f)",padding:"32px 20px",maxWidth:"440px",margin:"0 auto"}}>
+    <div style={{height:"100vh",maxHeight:"100dvh",overflowY:"auto",background:"linear-gradient(135deg,#0a0a0f,#12121f)",padding:"32px 20px",maxWidth:"440px",margin:"0 auto"}}>
       <div style={{textAlign:"center",marginBottom:"28px"}}>
         <div style={{fontSize:"40px",marginBottom:"12px"}}>📚</div>
         <h1 style={{fontSize:"22px",fontWeight:"300",letterSpacing:"2px",marginBottom:"8px"}}>歡迎使用每日英文</h1>
@@ -849,12 +849,12 @@ ${dialogue}
   );
 
   return (
-    <div style={{flex:1,display:"flex",flexDirection:"column",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
+    <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
       <div style={{padding:"10px 14px",background:`${accent}11`,borderBottom:`1px solid ${accent}22`,flexShrink:0}}>
         <div style={{fontSize:"11px",color:accent,marginBottom:"2px"}}>📍 場景 · 第 {turnCount} 輪</div>
         <div style={{fontSize:"12px",color:"#aaa",lineHeight:"1.5"}}>{scenario?.task}</div>
       </div>
-      <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"10px"}}>
+      <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"10px"}}>
         {turns.map((t,i)=>(
           <div key={i} style={{display:"flex",justifyContent:t.role==="user"?"flex-end":"flex-start",flexDirection:"column",alignItems:t.role==="user"?"flex-end":"flex-start",gap:"3px"}}>
             <div style={{maxWidth:"82%",padding:"10px 14px",borderRadius:t.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:t.role==="user"?accent:"rgba(255,255,255,0.08)",fontSize:"14px",color:"#fff",lineHeight:"1.6"}}>
@@ -1289,14 +1289,14 @@ Output STRICT JSON only, no extra text:
   );
 
   return (
-    <div style={{flex:1,display:"flex",flexDirection:"column",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
+    <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
       <div style={{padding:"10px 14px",background:`${accent}11`,borderBottom:`1px solid ${accent}22`,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{fontSize:"12px",color:accent}}>🗨️ 自由聊天</div>
         <div style={{fontSize:"12px",color: progress.count >= DAILY_TARGET ? "#52b788" : "#888"}}>
           ✨ 今日新字 {progress.count}/{DAILY_TARGET}{progress.count >= DAILY_TARGET ? " 🎉" : ""}
         </div>
       </div>
-      <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"10px"}}>
+      <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:"10px"}}>
         {turns.map((t,i)=>(
           <div key={i} style={{display:"flex",justifyContent:t.role==="user"?"flex-end":"flex-start",flexDirection:"column",alignItems:t.role==="user"?"flex-end":"flex-start",gap:"3px"}}>
             <div style={{maxWidth:"82%",padding:"10px 14px",borderRadius:t.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:t.role==="user"?accent:"rgba(255,255,255,0.08)",fontSize:"14px",color:"#fff",lineHeight:"1.6"}}>
@@ -1547,7 +1547,7 @@ function App() {
   const wordsToNext=nextLevel?nextLevel.minWords-(data?.totalWords||0):null;
   const canGoPrev=history.length>0&&!(isInHistory&&currentIdx===0);
   return(
-    <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:`linear-gradient(160deg,${c.bg} 0%,#0a0a0f 70%)`}}>
+    <div style={{display:"flex",flexDirection:"column",height:"100vh",maxHeight:"100dvh",overflow:"hidden",background:`linear-gradient(160deg,${c.bg} 0%,#0a0a0f 70%)`}}>
       <style>{`
         @keyframes fadeInRight{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
         @keyframes fadeInLeft{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
@@ -1601,7 +1601,7 @@ function App() {
         )}
       </div>
       {screen==="review"&&activeTab==="learn"&&(
-        <div style={{flex:1,overflowY:"auto"}}>
+        <div style={{flex:1,minHeight:0,overflowY:"auto"}}>
           <div style={{textAlign:"center",padding:"16px 0 4px",fontSize:"14px",color:"#f5a623",fontWeight:"700"}}>
             🔁 今日複習（{reviews.length} 個）
           </div>
@@ -1609,7 +1609,7 @@ function App() {
         </div>
       )}
       {screen==="main"&&activeTab==="learn"&&(
-        <div style={{flex:1,overflowY:"auto",padding:"12px 14px 16px",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
+        <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"12px 14px 16px",maxWidth:"460px",margin:"0 auto",width:"100%"}}>
           {isInHistory&&(
             <div style={{textAlign:"center",marginBottom:"10px",padding:"5px",background:`${c.accent}18`,borderRadius:"8px",fontSize:"12px",color:c.accent}}>
               📖 回顧第 {currentIdx+1} / {history.length} 個
@@ -1684,12 +1684,12 @@ function App() {
         </div>
       )}
       {activeTab==="chat"&&(
-        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <ConversationScreen appData={appData} accent={c.accent}/>
         </div>
       )}
       {activeTab==="freechat"&&(
-        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <FreeChatScreen appData={appData} accent={c.accent}/>
         </div>
       )}
