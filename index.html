@@ -1079,6 +1079,45 @@ function FreeChatScreen({appData, accent}) {
   }
 
   // 處理用戶說的中文 → 翻譯成英文教學
+  // 偵測「這個英文怎麼說」類型的詢問（中文或英文問法皆可）
+  function isAskingHowToSay(text) {
+    const patterns = [
+      /英文.{0,4}怎麼說/, /英文.{0,4}怎麼講/, /怎麼說.{0,4}英文/,
+      /英文.{0,4}說/, /用英文.{0,6}說/, /English.{0,6}怎麼/,
+      /how (do|would|can) (you|i) say/i, /what.{0,3}s.{0,3}in english/i,
+      /how to say/i, /in english\??$/i
+    ];
+    return patterns.some(p => p.test(text));
+  }
+
+  // 直接回答「怎麼說」的問題，當作一般對話顯示（附中文）
+  async function answerHowToSay(userText) {
+    setAiThinking(true);
+    const newTurns = [...turns, {role:"user", text:userText, cn:""}];
+    setTurns(newTurns);
+    try {
+      const res = await fetch("/api/chat", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({max_tokens:200, messages:[{role:"user", content:
+          `用戶在問一個英文怎麼說的問題：「${userText}」
+請用Jamie（活潑友善的台裔美籍朋友）的口吻直接回答，先給出最自然的英文說法，再用一句話簡短補充說明或舉例。
+只輸出純JSON，不要其他文字：
+{"reply":"英文怎麼說的答案 + 簡短補充（英文，1-2句）","replyCn":"繁體中文翻譯"}`}]})
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "{}";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+      const reply = parsed?.reply || "Good question! Let me think about that.";
+      const replyCn = parsed?.replyCn || "好問題！讓我想想。";
+      setTurns(prev => [...prev, {role:"ai", text: reply, cn: replyCn}]);
+      speakText(reply);
+    } catch(e) {
+      setTurns(prev => [...prev, {role:"ai", text:"Hmm, let me think about that one!", cn:"嗯，讓我想想這個怎麼說！"}]);
+    }
+    setAiThinking(false);
+  }
+
   async function handleChineseInput(userText) {
     setAiThinking(true);
     try {
@@ -1109,6 +1148,11 @@ function FreeChatScreen({appData, accent}) {
   }
 
   async function handleUserMessage(userText) {
+    // 優先判斷：是不是在「問怎麼說」，不管中英文問法
+    if (isAskingHowToSay(userText)) {
+      await answerHowToSay(userText);
+      return;
+    }
     const hasChinese = /[一-鿿]/.test(userText);
     if (hasChinese) {
       await handleChineseInput(userText);
@@ -1149,8 +1193,10 @@ Rules:
 - English only, zero formal language.
 ${shouldTeachNewWord ? `- Try to naturally introduce ONE useful new English word or short phrase that fits the conversation (avoid these already-learned ones: ${learnedWords.join(", ") || "none"}). If you do, return it in the newWord field below.` : `- Don't introduce any new vocabulary right now, the user already hit today's word goal.`}
 
+IMPORTANT: replyCn is REQUIRED — always provide a natural Traditional Chinese translation of your reply, never leave it empty.
+
 Output STRICT JSON only, no extra text:
-{"reply":"your English reply","replyCn":"繁體中文翻譯","newWord": ${shouldTeachNewWord ? '{"word":"the new word or phrase","meaning":"中文意思","note":"一句話講怎麼用，活潑口語"} or null if you did not introduce one this turn' : 'null'}}`;
+{"reply":"your English reply","replyCn":"繁體中文翻譯（必填，不可為空）","newWord": ${shouldTeachNewWord ? '{"word":"the new word or phrase","meaning":"中文意思","note":"一句話講怎麼用，活潑口語"} or null if you did not introduce one this turn' : 'null'}}`;
 
       const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
@@ -1163,7 +1209,20 @@ Output STRICT JSON only, no extra text:
       try { parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { reply: text, replyCn: "", newWord: null }; }
       catch(e) { parsed = { reply: text || "Haha nice, tell me more!", replyCn: "", newWord: null }; }
 
-      setTurns(prev => [...prev, {role:"ai", text: parsed.reply, cn: parsed.replyCn || ""}]);
+      // 保底機制：如果AI沒給中文翻譯，再補打一次翻譯API，確保一定有中文
+      let finalCn = parsed.replyCn;
+      if (!finalCn || !finalCn.trim()) {
+        try {
+          const tr2 = await fetch("/api/chat", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({max_tokens:100, messages:[{role:"user",content:`把這句英文翻譯成自然的繁體中文，只輸出翻譯，不要其他文字：${parsed.reply}`}]})
+          });
+          const td2 = await tr2.json();
+          finalCn = td2.content?.[0]?.text || "";
+        } catch(e2) {}
+      }
+
+      setTurns(prev => [...prev, {role:"ai", text: parsed.reply, cn: finalCn || ""}]);
       speakText(parsed.reply);
 
       if (parsed.newWord && parsed.newWord.word) {
